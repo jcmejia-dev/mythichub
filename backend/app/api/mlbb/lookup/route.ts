@@ -19,12 +19,12 @@ export async function GET(request:NextRequest){
     method:'POST',headers:{'Content-Type':'application/json','x-liog-sign':signature},
     body:raw,signal:AbortSignal.timeout(8000),cache:'no-store'
    });
-   if(!response.ok)return NextResponse.json({nickname:null,available:false,message:'Distribution Hub lookup unavailable. Check API credentials, quota or service status.'});
+   if(!response.ok){const reason=response.status===401||response.status===403?'API access denied. Confirm the member code, secret, seller verification and IP allowlist.':response.status===429?'Nickname lookup rate limit reached. Try again later.':response.status>=500?'Distribution Hub service is temporarily unavailable.':'Distribution Hub rejected the lookup request. Check the provider API documentation and account permissions.';return NextResponse.json({nickname:null,available:false,message:reason,providerStatus:response.status});}
    const data=await response.json();
-   const nickname=typeof data?.username==='string'?data.username.trim():'';
-   if(data?.ok&&data?.found&&nickname&&nickname.length<=80)
+   const nickname=typeof data?.username==='string'?data.username.trim():typeof data?.nickname==='string'?data.nickname.trim():'';
+   if((data?.ok||data?.success)&&data?.found!==false&&nickname&&nickname.length<=80)
     return NextResponse.json({nickname,available:true,ownershipVerified:false,provider:'distribution-hub'});
-   return NextResponse.json({nickname:null,available:true,message:'Player not found. Check IDs or enter nickname manually.'});
+   return NextResponse.json({nickname:null,available:false,message:'Provider did not return a confirmed nickname. Check IDs and the documented response format.',providerStatus:response.status});
   }catch{return NextResponse.json({nickname:null,available:false,message:'Nickname service temporarily unavailable. Enter nickname manually.'});}
  }
  const key=process.env.MLBB_LOOKUP_API_KEY;
