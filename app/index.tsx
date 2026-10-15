@@ -25,7 +25,7 @@ async function request(path:string,method='GET',body?:object,token?:string|null)
 const panel=(extra:object={})=>({backgroundColor:C.panel,borderWidth:1,borderColor:C.stroke,borderRadius:20,padding:20,...extra});
 function Chip({children,color=C.violet}:{children:React.ReactNode;color?:string}){return <View style={{backgroundColor:color+'1C',borderColor:color+'55',borderWidth:1,paddingHorizontal:11,paddingVertical:7,borderRadius:30,alignSelf:'flex-start'}}><Text style={txt(11,color,'800')}>{children}</Text></View>}
 function Action({title,onPress,subtle=false,disabled=false}:{title:string;onPress:()=>void;subtle?:boolean;disabled?:boolean}){return <TouchableOpacity onPress={onPress} disabled={disabled} style={{paddingHorizontal:18,paddingVertical:15,backgroundColor:subtle?C.panel2:C.violet,borderRadius:13,alignItems:'center',borderWidth:subtle?1:0,borderColor:C.stroke,opacity:disabled?.5:1,marginTop:10}}><Text style={txt(13,subtle?C.white:C.bg,'900')}>{title}</Text></TouchableOpacity>}
-function Field({label,value,onChange,placeholder,number=false}:{label:string;value:string;onChange:(v:string)=>void;placeholder?:string;number?:boolean}){return <View style={{marginTop:16}}><Text style={txt(12,C.muted,'700')}>{label}</Text><TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor="#6C7D9F" keyboardType={number?'number-pad':'default'} style={inputStyle}/></View>}
+function Field({label,value,onChange,placeholder,number=false,secure=false}:{label:string;value:string;onChange:(v:string)=>void;placeholder?:string;number?:boolean;secure?:boolean}){return <View style={{marginTop:16}}><Text style={txt(12,C.muted,'700')}>{label}</Text><TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor="#6C7D9F" keyboardType={number?'number-pad':'default'} secureTextEntry={secure} autoCapitalize={secure?'none':'sentences'} style={inputStyle}/></View>}
 export default function Home(){
  const {width}=useWindowDimensions(),wide=width>=880;
  const [user,setUser]=useState<User|null>(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[token,setToken]=useState<string|null>(null);
@@ -55,7 +55,7 @@ export default function Home(){
    <View style={panel({padding:wide?32:22})}><Chip>✦ PRIVATE PLAYER SPACE</Chip><Text style={{...txt(28,C.white,'900'),marginTop:20}}>{mode==='signIn'?'Welcome back, legend.':'Join the lounge.'}</Text><Text style={{...txt(13,C.muted),marginTop:7,lineHeight:20}}>Your progress, collections, and account details stay in your own space.</Text>
     {mode==='signUp'?<Field label="DISPLAY NAME" value={name} onChange={setName} placeholder="Your gamer name"/>:null}
     <Field label="EMAIL ADDRESS" value={email} onChange={setEmail} placeholder="you@example.com"/>
-    <Field label="PASSWORD" value={password} onChange={setPassword} placeholder="At least 8 characters"/>
+    <Field label="PASSWORD" value={password} onChange={setPassword} placeholder="At least 8 characters" secure/>
     <Action title={busy?'Please wait…':mode==='signIn'?'Enter MythicHub →':'Create account →'} onPress={authenticate} disabled={busy}/>
     <Action title={mode==='signIn'?'New here? Create an account':'Already a member? Sign in'} subtle onPress={()=>setMode(mode==='signIn'?'signUp':'signIn')}/>
    </View><Text style={{...txt(11,C.muted),textAlign:'center',marginTop:18}}>Independent MLBB companion • No game password required</Text>
