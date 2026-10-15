@@ -121,7 +121,7 @@ export default function Home(){
      {sectionTitle('Your account','A private space for your profile, session, and preferences.')}
      <View style={panel({maxWidth:700})}><Chip color={C.green}>● SIGNED IN</Chip><Text style={{...txt(22,C.white,'900'),marginTop:17}}>{user.name}</Text><Text style={{...txt(13,C.muted),marginTop:6}}>{user.email}</Text><View style={{height:1,backgroundColor:C.stroke,marginVertical:20}}/><Text style={txt(14,C.white,'800')}>Your data</Text><Text style={{...txt(12,C.muted),marginTop:9,lineHeight:21}}>MLBB identifiers are saved to your authenticated Neon profile. Collection and goal tracking currently use account-scoped storage on this device; they are not yet synced between devices.</Text><Action title="Manage player details" subtle onPress={()=>switchTab('player')}/><Action title="Sign out securely" onPress={signOut} disabled={busy}/></View>
     </>:null}
-   </View>)}
+   </Animated.View>)}
    {shell(<View style={{borderTopWidth:1,borderColor:C.stroke,marginTop:60,paddingTop:22,alignItems:'center'}}><Text style={txt(11,C.muted)}>MYTHICHUB • AN INDEPENDENT GAMING COMPANION • NOT AFFILIATED WITH MOONTON</Text></View>)}
   </>}
  </ScrollView></KeyboardAvoidingView>
