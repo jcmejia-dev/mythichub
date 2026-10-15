@@ -10,16 +10,19 @@ export async function GET(request:NextRequest){
  const serverId=request.nextUrl.searchParams.get('serverId')??'';
  if(!/^\d{5,15}$/.test(playerId)||!/^\d{3,8}$/.test(serverId))return NextResponse.json({error:'Invalid player or server ID'},{status:400});
  const memberCode=process.env.DISTRIBUTION_HUB_MEMBER_CODE?.trim();
- const secret=process.env.DISTRIBUTION_HUB_SECRET?.trim();
+ const scopedKeyId=process.env.DISTRIBUTION_HUB_USERNAME_KEY_ID?.trim();
+ const scopedSecret=process.env.DISTRIBUTION_HUB_USERNAME_KEY_SECRET?.trim();
+ const secret=scopedKeyId?scopedSecret:process.env.DISTRIBUTION_HUB_SECRET?.trim();
+ if(scopedKeyId&&!scopedSecret)return NextResponse.json({nickname:null,available:false,message:'Scoped username key is configured without its Secret. Set DISTRIBUTION_HUB_USERNAME_KEY_SECRET on the backend.'});
  if(memberCode&&secret){
   try{
    const raw=JSON.stringify({member_code:memberCode,game:'mobile-legends',user_id:playerId,server_id:serverId});
    const signature=createHmac('sha256',secret).update(raw).digest('hex');
    const response=await fetch('https://distribution.liogames.com/api/v1/username-check',{
-    method:'POST',headers:{'Content-Type':'application/json','x-liog-sign':signature},
+    method:'POST',headers:{'Content-Type':'application/json','x-liog-sign':signature,...(scopedKeyId?{'X-LIOG-KEY-ID':scopedKeyId}:{})},
     body:raw,signal:AbortSignal.timeout(8000),cache:'no-store'
    });
-   if(!response.ok){const reason=response.status===401||response.status===403?'API access denied. Confirm the member code, secret, seller verification and IP allowlist.':response.status===429?'Nickname lookup rate limit reached. Try again later.':response.status>=500?'Distribution Hub service is temporarily unavailable.':'Distribution Hub rejected the lookup request. Check the provider API documentation and account permissions.';return NextResponse.json({nickname:null,available:false,message:reason,providerStatus:response.status});}
+   if(!response.ok){const reason=response.status===401||response.status===403?'API access denied. Confirm the Member ID, selected signing Secret, scoped key permission, and provider restrictions.':response.status===429?'Nickname lookup rate limit reached. Try again later.':response.status>=500?'Distribution Hub service is temporarily unavailable.':'Distribution Hub rejected the lookup request. Check the provider API documentation and account permissions.';return NextResponse.json({nickname:null,available:false,message:reason,providerStatus:response.status});}
    const data=await response.json();
    const nickname=typeof data?.username==='string'?data.username.trim():typeof data?.nickname==='string'?data.nickname.trim():'';
    if((data?.ok||data?.success)&&data?.found!==false&&nickname&&nickname.length<=80)
