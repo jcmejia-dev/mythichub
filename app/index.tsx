@@ -1,18 +1,18 @@
-import React,{useEffect,useState} from 'react';
-import {ActivityIndicator,Alert,KeyboardAvoidingView,Platform,ScrollView,Text,TextInput,TouchableOpacity,View,useWindowDimensions} from 'react-native';
+import React,{useEffect,useRef,useState} from 'react';
+import {Animated,Easing,ActivityIndicator,Alert,KeyboardAvoidingView,Platform,ScrollView,Text,TextInput,TouchableOpacity,View,useWindowDimensions} from 'react-native';
 import {router} from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API=process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/,'');
-const C={bg:'#080D1D',panel:'#111B33',panel2:'#182541',stroke:'#293759',gold:'#F3CE83',violet:'#A77BFF',cyan:'#6CE4EE',white:'#F5F7FF',muted:'#94A4C4',green:'#7FE6B6'};
+const C={bg:'#070A10',panel:'#101622',panel2:'#1B2333',stroke:'#3B4559',gold:'#F6C75D',violet:'#A25AFF',cyan:'#4CE5EF',white:'#F6F8FC',muted:'#A5B1C7',green:'#7FE6B6'};
 type User={id:string;email:string;name:string};
-type Tab='home'|'player'|'collection'|'budget'|'settings';
+type Tab='home'|'player'|'collection'|'budget'|'trade'|'settings';
 type Tracker={skins:string[];ownedDiamonds:string;targetDiamonds:string;magicPoints:string;notes:string};
 const initial:Tracker={skins:[],ownedDiamonds:'0',targetDiamonds:'1000',magicPoints:'0',notes:''};
 const authKey='mythichub_auth_token';
 const txt=(size=14,color=C.white,weight:'400'|'500'|'600'|'700'|'800'|'900'='400')=>({fontSize:size,color,fontWeight:weight} as const);
-const inputStyle={backgroundColor:C.panel2,borderWidth:1,borderColor:C.stroke,borderRadius:13,padding:15,color:C.white,marginTop:8} as const;
+const inputStyle={backgroundColor:C.panel2,borderWidth:1,borderColor:C.stroke,borderRadius:2,padding:15,color:C.white,marginTop:8} as const;
 async function readToken(){return Platform.OS==='web'?null:SecureStore.getItemAsync(authKey)}
 async function writeToken(value:string|null){if(Platform.OS==='web')return;if(value)await SecureStore.setItemAsync(authKey,value);else await SecureStore.deleteItemAsync(authKey)}
 async function request(path:string,method='GET',body?:object,token?:string|null){
@@ -22,15 +22,15 @@ async function request(path:string,method='GET',body?:object,token?:string|null)
  if(!response.ok)throw new Error(data?.message??data?.error?.message??data?.error??'Request failed ('+response.status+')');
  return {data,response};
 }
-const panel=(extra:object={})=>({backgroundColor:C.panel,borderWidth:1,borderColor:C.stroke,borderRadius:20,padding:20,...extra});
-function Chip({children,color=C.violet}:{children:React.ReactNode;color?:string}){return <View style={{backgroundColor:color+'1C',borderColor:color+'55',borderWidth:1,paddingHorizontal:11,paddingVertical:7,borderRadius:30,alignSelf:'flex-start'}}><Text style={txt(11,color,'800')}>{children}</Text></View>}
-function Action({title,onPress,subtle=false,disabled=false}:{title:string;onPress:()=>void;subtle?:boolean;disabled?:boolean}){return <TouchableOpacity onPress={onPress} disabled={disabled} style={{paddingHorizontal:18,paddingVertical:15,backgroundColor:subtle?C.panel2:C.violet,borderRadius:13,alignItems:'center',borderWidth:subtle?1:0,borderColor:C.stroke,opacity:disabled?.5:1,marginTop:10}}><Text style={txt(13,subtle?C.white:C.bg,'900')}>{title}</Text></TouchableOpacity>}
+const panel=(extra:object={})=>({backgroundColor:C.panel,borderWidth:1,borderColor:C.stroke,borderRadius:3,padding:20,...extra});
+function Chip({children,color=C.violet}:{children:React.ReactNode;color?:string}){return <View style={{backgroundColor:color+'1C',borderColor:color+'55',borderWidth:1,paddingHorizontal:11,paddingVertical:7,borderRadius:2,alignSelf:'flex-start'}}><Text style={txt(11,color,'800')}>{children}</Text></View>}
+function Action({title,onPress,subtle=false,disabled=false}:{title:string;onPress:()=>void;subtle?:boolean;disabled?:boolean}){return <TouchableOpacity onPress={onPress} disabled={disabled} style={{paddingHorizontal:18,paddingVertical:15,backgroundColor:subtle?C.panel2:C.violet,borderRadius:2,alignItems:'center',borderWidth:subtle?1:0,borderColor:C.stroke,opacity:disabled?.5:1,marginTop:10}}><Text style={txt(13,subtle?C.white:C.bg,'900')}>{title}</Text></TouchableOpacity>}
 function Field({label,value,onChange,placeholder,number=false,secure=false}:{label:string;value:string;onChange:(v:string)=>void;placeholder?:string;number?:boolean;secure?:boolean}){return <View style={{marginTop:16}}><Text style={txt(12,C.muted,'700')}>{label}</Text><TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor="#6C7D9F" keyboardType={number?'number-pad':'default'} secureTextEntry={secure} autoCapitalize={secure?'none':'sentences'} style={inputStyle}/></View>}
 export default function Home(){
  const {width}=useWindowDimensions(),wide=width>=880;
  const [user,setUser]=useState<User|null>(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[token,setToken]=useState<string|null>(null);
  const [mode,setMode]=useState<'signIn'|'signUp'>('signIn'),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[name,setName]=useState('');
- const [tab,setTab]=useState<Tab>('home'),[playerId,setPlayerId]=useState(''),[serverId,setServerId]=useState(''),[nickname,setNickname]=useState(''),[linked,setLinked]=useState(false);
+ const [tab,setTab]=useState<Tab>('home'),fade=useRef(new Animated.Value(1)).current,slide=useRef(new Animated.Value(0)).current,[playerId,setPlayerId]=useState(''),[serverId,setServerId]=useState(''),[nickname,setNickname]=useState(''),[linked,setLinked]=useState(false);
  const [lookupStatus,setLookupStatus]=useState(''),[lookupName,setLookupName]=useState<string|null>(null),[tracker,setTracker]=useState<Tracker>(initial),[trackerReady,setTrackerReady]=useState(false),[skinDraft,setSkinDraft]=useState('');
  const notify=(title:string,message:string)=>Platform.OS==='web'?window.alert(title+': '+message):Alert.alert(title,message);
  useEffect(()=>{let active=true;(async()=>{try{const stored=await readToken();const {data}=await request('/api/auth/get-session','GET',undefined,stored);if(active){setToken(stored);setUser(data?.user??null)}}catch{}finally{if(active)setLoading(false)}})();return()=>{active=false}},[]);
@@ -42,7 +42,8 @@ export default function Home(){
  async function save(){if(!/^\d{5,15}$/.test(playerId.trim())||!/^\d{3,8}$/.test(serverId.trim())){notify('Invalid IDs','Player ID must be 5–15 digits and Zone ID 3–8 digits.');return}setBusy(true);try{await request('/api/profile','PUT',{playerId:playerId.trim(),serverId:serverId.trim(),nickname:nickname.trim().slice(0,40)},token);setLinked(true);notify('Profile saved','Your MLBB identifiers were saved privately. Ownership remains unverified.')}catch(e){notify('Save failed',e instanceof Error?e.message:String(e))}finally{setBusy(false)}}
  async function signOut(){setBusy(true);try{await request('/api/auth/sign-out','POST',{},token)}catch{}finally{await writeToken(null);setToken(null);setUser(null);setTracker(initial);setTab('home');setBusy(false)}}
  const update=(key:keyof Tracker,value:string)=>setTracker(p=>({...p,[key]:value}));
- const nav:[Tab,string,string][]=[['home','⌂','Dashboard'],['player','◎','My Player'],['collection','✧','Collection'],['budget','◈','Diamond Vault'],['settings','⚙','Settings']];
+ function switchTab(next:Tab){if(next===tab)return;fade.setValue(0);slide.setValue(12);setTab(next);Animated.parallel([Animated.timing(fade,{toValue:1,duration:230,easing:Easing.out(Easing.cubic),useNativeDriver:true}),Animated.timing(slide,{toValue:0,duration:260,easing:Easing.out(Easing.cubic),useNativeDriver:true})]).start()}
+ const nav:[Tab,string,string][]=[['home','⌂','Dashboard'],['player','◎','My Player'],['collection','✧','Collection'],['budget','◈','Diamond Vault'],['trade','⛨','Secure Trade'],['settings','⚙','Settings']];
  const shell=(children:React.ReactNode)=><View style={{maxWidth:1220,width:'100%',alignSelf:'center',paddingHorizontal:wide?28:17}}>{children}</View>;
  const sectionTitle=(title:string,desc:string)=><View style={{marginBottom:22}}><Text style={txt(wide?29:25,C.white,'900')}>{title}</Text><Text style={{...txt(13,C.muted),marginTop:7,lineHeight:21}}>{desc}</Text></View>;
  const metric=(icon:string,value:string,label:string,accent:string)=><View style={{...panel({flex:1,minWidth:wide?180:135,padding:17}),marginRight:10,marginBottom:10}}><Text style={txt(22,accent,'800')}>{icon}</Text><Text style={{...txt(24,C.white,'900'),marginTop:12}}>{value}</Text><Text style={{...txt(11,C.muted,'600'),marginTop:5}}>{label}</Text></View>;
@@ -64,20 +65,20 @@ export default function Home(){
    <View style={{backgroundColor:'#0D1529',borderBottomWidth:1,borderBottomColor:C.stroke,paddingVertical:19}}>
     {shell(<View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:14}}>
      <View><Text style={txt(24,C.gold,'900')}>✦ MYTHICHUB</Text><Text style={{...txt(10,C.muted,'800'),letterSpacing:2,marginTop:3}}>THE GAMING LOUNGE</Text></View>
-     <View style={{flexDirection:'row',alignItems:'center',gap:9}}><Chip color={C.green}>● PRIVATE SPACE</Chip><TouchableOpacity onPress={()=>setTab('settings')} style={{backgroundColor:C.panel2,padding:12,borderRadius:40}}><Text style={txt(14,C.gold,'900')}>{(user.name||'P').slice(0,1).toUpperCase()}</Text></TouchableOpacity></View>
+     <View style={{flexDirection:'row',alignItems:'center',gap:9}}><Chip color={C.green}>● PRIVATE SPACE</Chip><TouchableOpacity onPress={()=>switchTab('settings')} style={{backgroundColor:C.panel2,padding:12,borderRadius:2}}><Text style={txt(14,C.gold,'900')}>{(user.name||'P').slice(0,1).toUpperCase()}</Text></TouchableOpacity></View>
     </View>)}
    </View>
-   {shell(<View style={{flexDirection:'row',flexWrap:'wrap',gap:8,paddingVertical:17}}>{nav.map(([id,icon,label])=><TouchableOpacity key={id} onPress={()=>setTab(id)} style={{backgroundColor:tab===id?C.violet:C.panel,borderWidth:1,borderColor:tab===id?C.violet:C.stroke,paddingHorizontal:wide?18:12,paddingVertical:12,borderRadius:13}}><Text style={txt(12,tab===id?C.bg:C.muted,'800')}>{icon}  {label}</Text></TouchableOpacity>)}</View>)}
-   {shell(<View style={{paddingTop:wide?20:8}}>
+   {shell(<View style={{flexDirection:'row',flexWrap:'wrap',gap:8,paddingVertical:17}}>{nav.map(([id,icon,label])=><TouchableOpacity key={id} onPress={()=>switchTab(id)} style={{backgroundColor:tab===id?C.violet:C.panel,borderWidth:1,borderColor:tab===id?C.violet:C.stroke,paddingHorizontal:wide?18:12,paddingVertical:12,borderRadius:2}}><Text style={txt(12,tab===id?C.bg:C.muted,'800')}>{icon}  {label}</Text></TouchableOpacity>)}</View>)}
+   {shell(<Animated.View style={{paddingTop:wide?20:8,opacity:fade,transform:[{translateY:slide}]}}>
     {tab==='home'?<>
      <View style={{...panel({padding:wide?30:21}),backgroundColor:'#1B1740',borderColor:'#4A3A7D',marginBottom:20,overflow:'hidden'}}>
       <Chip color={C.gold}>✦ WELCOME TO YOUR LOUNGE</Chip><Text style={{...txt(wide?33:27,C.white,'900'),marginTop:15}}>Ready to climb, {user.name?.split(' ')[0]||'Legend'}?</Text><Text style={{...txt(14,C.muted),marginTop:9,maxWidth:590,lineHeight:23}}>Your command center for player identity, collections, diamond goals, and future top-ups. Built for players, not clutter.</Text>
-      <View style={{flexDirection:'row',flexWrap:'wrap',gap:10,marginTop:14}}><Action title="View my player →" onPress={()=>setTab('player')}/><Action title="Explore top-ups ↗" subtle onPress={()=>router.push('/topup')}/></View>
+      <View style={{flexDirection:'row',flexWrap:'wrap',gap:10,marginTop:14}}><Action title="View my player →" onPress={()=>switchTab('player')}/><Action title="Explore top-ups ↗" subtle onPress={()=>router.push('/topup')}/></View>
      </View>
      <View style={{flexDirection:'row',flexWrap:'wrap'}}>{metric('◎',linked?'Linked':'Not linked','MLBB account',C.cyan)}{metric('✧',String(tracker.skins.length),'Skins tracked',C.violet)}{metric('◈',owned.toLocaleString(),'Diamonds logged',C.gold)}{metric('✦',Math.min(100,Math.max(0,Number(tracker.magicPoints)||0))+'/100','Magic Wheel progress',C.green)}</View>
      <View style={{flexDirection:wide?'row':'column',gap:15,marginTop:10}}>
-      <View style={panel({flex:1})}><Text style={txt(17,C.white,'900')}>◎ Player identity</Text><Text style={{...txt(13,C.muted),marginTop:9,lineHeight:21}}>{linked?'Saved Player ID: '+playerId+' ('+serverId+')':'Link your game account without needing nickname verification.'}</Text><Action title={linked?'Manage profile':'Link account'} subtle onPress={()=>setTab('player')}/></View>
-      <View style={panel({flex:1})}><Text style={txt(17,C.white,'900')}>◈ Diamond goal</Text><Text style={{...txt(13,C.muted),marginTop:9}}>{owned.toLocaleString()} / {goal.toLocaleString()} diamonds</Text><View style={{height:9,backgroundColor:C.panel2,borderRadius:10,marginTop:17,overflow:'hidden'}}><View style={{width:progress+'%',height:'100%',backgroundColor:C.violet,borderRadius:10}}/></View><Action title="Open vault" subtle onPress={()=>setTab('budget')}/></View>
+      <View style={panel({flex:1})}><Text style={txt(17,C.white,'900')}>◎ Player identity</Text><Text style={{...txt(13,C.muted),marginTop:9,lineHeight:21}}>{linked?'Saved Player ID: '+playerId+' ('+serverId+')':'Link your game account without needing nickname verification.'}</Text><Action title={linked?'Manage profile':'Link account'} subtle onPress={()=>switchTab('player')}/></View>
+      <View style={panel({flex:1})}><Text style={txt(17,C.white,'900')}>◈ Diamond goal</Text><Text style={{...txt(13,C.muted),marginTop:9}}>{owned.toLocaleString()} / {goal.toLocaleString()} diamonds</Text><View style={{height:9,backgroundColor:C.panel2,borderRadius:10,marginTop:17,overflow:'hidden'}}><View style={{width:progress+'%',height:'100%',backgroundColor:C.violet,borderRadius:10}}/></View><Action title="Open vault" subtle onPress={()=>switchTab('budget')}/></View>
      </View>
     </>:null}
     {tab==='player'?<>
@@ -87,7 +88,7 @@ export default function Home(){
       <Field label="SERVER / ZONE ID" value={serverId} onChange={v=>{setServerId(v);setLookupName(null)}} placeholder="5039" number/>
       <Action title={busy?'Checking…':'◎ Check nickname (optional)'} subtle disabled={busy} onPress={lookup}/>
       {lookupStatus?<Text style={{...txt(12,C.muted),marginTop:12,lineHeight:19}}>{lookupStatus}</Text>:null}
-      {lookupName?<View style={{backgroundColor:C.panel2,padding:15,borderRadius:12,marginTop:12}}><Text style={txt(15,C.cyan,'800')}>{lookupName}</Text><Action title="Use this nickname" onPress={()=>{setNickname(lookupName);setLookupName(null);setLookupStatus('Nickname selected. This does not verify ownership.')}}/></View>:null}
+      {lookupName?<View style={{backgroundColor:C.panel2,padding:15,borderRadius:2,marginTop:12}}><Text style={txt(15,C.cyan,'800')}>{lookupName}</Text><Action title="Use this nickname" onPress={()=>{setNickname(lookupName);setLookupName(null);setLookupStatus('Nickname selected. This does not verify ownership.')}}/></View>:null}
       <Field label="IN-GAME NICKNAME (OPTIONAL)" value={nickname} onChange={setNickname} placeholder="Your in-game name"/>
       <Action title={busy?'Saving…':'Save my player profile'} onPress={save} disabled={busy}/>
       <Text style={{...txt(11,C.muted),marginTop:15,lineHeight:18}}>🔒 Saved to your authenticated profile. Player ID lookup does not establish MLBB account ownership.</Text>
@@ -110,9 +111,15 @@ export default function Home(){
      </View>
      <View style={panel({marginTop:16})}><Text style={txt(16,C.white,'900')}>Personal notes</Text><Field label="REMINDERS / PLANS" value={tracker.notes} onChange={v=>update('notes',v.slice(0,500))} placeholder="Next skin to save for, event goals…"/><Text style={{...txt(11,C.muted),marginTop:10}}>Your tracker changes save automatically on this device, separated by your MythicHub account.</Text></View>
     </>:null}
+    {tab==='trade'?<>
+     {sectionTitle('SECURE TRADE // ESCROW LAB','A proposed protected trading workflow. No funds are accepted, held, or released by MythicHub yet.')}
+     <View style={{...panel({marginBottom:18}),borderColor:C.violet}}><Chip color={C.gold}>⛨ PROTOTYPE • TRANSACTIONS DISABLED</Chip><Text style={{...txt(22,C.white,'900'),marginTop:18}}>Trade with safeguards. Not blind trust.</Text><Text style={{...txt(13,C.muted),marginTop:12,lineHeight:23}}>A legitimate escrow service would require verified participants, regulated payment custody through an authorized partner, independent payment confirmation, seller delivery evidence, buyer acceptance, dispute handling, and auditable release or refunds.</Text></View>
+     <View style={{flexDirection:wide?'row':'column',gap:12}}>{[['01','Create trade','Buyer and seller agree on item, price and terms.'],['02','Secure payment','Authorized payment partner confirms funds. No receipt screenshots as proof.'],['03','Deliver & review','Seller fulfills; buyer confirms or raises a dispute.'],['04','Release or refund','Partner releases or refunds after policy-based resolution.']].map(([n,title,desc])=><View key={n} style={panel({flex:1})}><Text style={txt(22,C.violet,'900')}>{n}</Text><Text style={{...txt(16,C.white,'900'),marginTop:15}}>{title}</Text><Text style={{...txt(12,C.muted),marginTop:9,lineHeight:21}}>{desc}</Text></View>)}</View>
+     <View style={panel({marginTop:16})}><Text style={txt(16,C.gold,'900')}>Protection is not a guarantee</Text><Text style={{...txt(12,C.muted),marginTop:10,lineHeight:21}}>Scams, stolen accounts, chargebacks and disputed delivery can still occur. MythicHub must not claim zero risk. Trade creation, deposits, escrow and payout are disabled pending legal, payment-provider and security review.</Text><Action title="Secure trades are not live yet" disabled onPress={()=>{}}/></View>
+    </>:null}
     {tab==='settings'?<>
      {sectionTitle('Your account','A private space for your profile, session, and preferences.')}
-     <View style={panel({maxWidth:700})}><Chip color={C.green}>● SIGNED IN</Chip><Text style={{...txt(22,C.white,'900'),marginTop:17}}>{user.name}</Text><Text style={{...txt(13,C.muted),marginTop:6}}>{user.email}</Text><View style={{height:1,backgroundColor:C.stroke,marginVertical:20}}/><Text style={txt(14,C.white,'800')}>Your data</Text><Text style={{...txt(12,C.muted),marginTop:9,lineHeight:21}}>MLBB identifiers are saved to your authenticated Neon profile. Collection and goal tracking currently use account-scoped storage on this device; they are not yet synced between devices.</Text><Action title="Manage player details" subtle onPress={()=>setTab('player')}/><Action title="Sign out securely" onPress={signOut} disabled={busy}/></View>
+     <View style={panel({maxWidth:700})}><Chip color={C.green}>● SIGNED IN</Chip><Text style={{...txt(22,C.white,'900'),marginTop:17}}>{user.name}</Text><Text style={{...txt(13,C.muted),marginTop:6}}>{user.email}</Text><View style={{height:1,backgroundColor:C.stroke,marginVertical:20}}/><Text style={txt(14,C.white,'800')}>Your data</Text><Text style={{...txt(12,C.muted),marginTop:9,lineHeight:21}}>MLBB identifiers are saved to your authenticated Neon profile. Collection and goal tracking currently use account-scoped storage on this device; they are not yet synced between devices.</Text><Action title="Manage player details" subtle onPress={()=>switchTab('player')}/><Action title="Sign out securely" onPress={signOut} disabled={busy}/></View>
     </>:null}
    </View>)}
    {shell(<View style={{borderTopWidth:1,borderColor:C.stroke,marginTop:60,paddingTop:22,alignItems:'center'}}><Text style={txt(11,C.muted)}>MYTHICHUB • AN INDEPENDENT GAMING COMPANION • NOT AFFILIATED WITH MOONTON</Text></View>)}
