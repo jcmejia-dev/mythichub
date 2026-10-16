@@ -44,6 +44,83 @@ const color = {
   cyan: '#19DDF2',
 };
 
+function AuthInput({
+    icon,
+    placeholder,
+    value,
+    onChange,
+    secure = false,
+    autoComplete,
+    returnKeyType = 'next',
+    passwordVisible = false,
+    onTogglePassword,
+    onSubmit,
+  }: {
+    icon: React.ComponentProps<typeof Ionicons>['name'];
+    placeholder: string;
+    value: string;
+    onChange: (value: string) => void;
+    secure?: boolean;
+    autoComplete?: 'email' | 'password' | 'new-password' | 'name';
+    returnKeyType?: 'next' | 'go';
+    passwordVisible?: boolean;
+    onTogglePassword?: () => void;
+    onSubmit?: () => void;
+  }) {
+    return (
+      <View
+        style={{
+          minHeight: 54,
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 14,
+          borderRadius: 10,
+          borderWidth: 1,
+          borderColor: '#425278',
+          backgroundColor: '#151C33F2',
+        }}
+      >
+        <Ionicons name={icon} size={20} color="#93A8CF" />
+        <TextInput
+          accessibilityLabel={placeholder}
+          placeholder={placeholder}
+          placeholderTextColor="#8190B0"
+          value={value}
+          onChangeText={onChange}
+          keyboardType={autoComplete === 'email' ? 'email-address' : 'default'}
+          autoComplete={autoComplete}
+          autoCapitalize="none"
+          autoCorrect={false}
+          secureTextEntry={secure && !passwordVisible}
+          returnKeyType={returnKeyType}
+          onSubmitEditing={returnKeyType === 'go' ? onSubmit : undefined}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            paddingHorizontal: 12,
+            paddingVertical: 14,
+            color: color.white,
+            fontSize: 15,
+          }}
+        />
+        {secure && (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={passwordVisible ? 'Hide password' : 'Show password'}
+            onPress={onTogglePassword}
+            hitSlop={10}
+          >
+            <Ionicons
+              name={passwordVisible ? 'eye-off-outline' : 'eye-outline'}
+              size={21}
+              color="#9FAFD1"
+            />
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  }
+
 export default function MythicAuthScreen({
   mode,
   onChangeMode,
@@ -92,76 +169,6 @@ export default function MythicAuthScreen({
     marginBottom: 8,
   };
 
-  function AuthInput({
-    icon,
-    placeholder,
-    value,
-    onChange,
-    secure = false,
-    autoComplete,
-    returnKeyType = 'next',
-  }: {
-    icon: React.ComponentProps<typeof Ionicons>['name'];
-    placeholder: string;
-    value: string;
-    onChange: (value: string) => void;
-    secure?: boolean;
-    autoComplete?: 'email' | 'password' | 'new-password' | 'name';
-    returnKeyType?: 'next' | 'go';
-  }) {
-    return (
-      <View
-        style={{
-          minHeight: 54,
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 14,
-          borderRadius: 10,
-          borderWidth: 1,
-          borderColor: '#425278',
-          backgroundColor: '#151C33F2',
-        }}
-      >
-        <Ionicons name={icon} size={20} color="#93A8CF" />
-        <TextInput
-          accessibilityLabel={placeholder}
-          placeholder={placeholder}
-          placeholderTextColor="#8190B0"
-          value={value}
-          onChangeText={onChange}
-          keyboardType={autoComplete === 'email' ? 'email-address' : 'default'}
-          autoComplete={autoComplete}
-          autoCapitalize="none"
-          autoCorrect={false}
-          secureTextEntry={secure && !passwordVisible}
-          returnKeyType={returnKeyType}
-          onSubmitEditing={returnKeyType === 'go' ? onSubmit : undefined}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            paddingHorizontal: 12,
-            paddingVertical: 14,
-            color: color.white,
-            fontSize: 15,
-          }}
-        />
-        {secure && (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={passwordVisible ? 'Hide password' : 'Show password'}
-            onPress={() => setPasswordVisible((visible) => !visible)}
-            hitSlop={10}
-          >
-            <Ionicons
-              name={passwordVisible ? 'eye-off-outline' : 'eye-outline'}
-              size={21}
-              color="#9FAFD1"
-            />
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-  }
 
   return (
     <KeyboardAvoidingView
@@ -383,6 +390,9 @@ export default function MythicAuthScreen({
                     onChange={onChangePassword}
                     autoComplete={mode === 'signUp' ? 'new-password' : 'password'}
                     secure
+                    passwordVisible={passwordVisible}
+                    onTogglePassword={() => setPasswordVisible((visible) => !visible)}
+                    onSubmit={onSubmit}
                     returnKeyType="go"
                   />
                 </View>
