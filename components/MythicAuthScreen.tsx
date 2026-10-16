@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, RadialGradient, Stop, Path } from 'react-native-svg';
 
 type AuthMode = 'signIn' | 'signUp';
 
@@ -121,6 +122,168 @@ function AuthInput({
     );
   }
 
+
+/**
+ * Real accretion-disc illustration, not thin ellipse outlines.
+ * The spiral arms rotate behind the stationary crest with separate speeds.
+ * We flatten the rotating circular disc AFTER rotation so the horizon remains
+ * horizontal throughout the animation on web and native.
+ */
+function makeSpiral(startAngle: number, startRadius: number, endRadius: number, turns: number): string {
+  const segments = 135;
+  let path = '';
+  for (let i = 0; i < segments; i += 1) {
+    const t = i / (segments - 1);
+    const angle = startAngle + 2 * Math.PI * turns * t;
+    const radius = startRadius + (endRadius - startRadius) * t;
+    const x = 180 + radius * Math.cos(angle);
+    const y = 180 + radius * Math.sin(angle);
+    path += `${i ? ' L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
+  }
+  return path;
+}
+
+const VORTEX_ARMS = [
+  makeSpiral(0.32, 38, 149, 1.34),
+  makeSpiral(3.58, 46, 157, 1.28),
+  makeSpiral(1.65, 83, 164, 0.72),
+  makeSpiral(4.7, 76, 155, 0.84),
+];
+
+/** A genuinely visible purple/cyan black-hole vortex; no video or GPU shader required. */
+function MythicVortex({
+  size,
+  orbit,
+  counterOrbit,
+  pulse,
+}: {
+  size: number;
+  orbit: Animated.Value;
+  counterOrbit: Animated.Value;
+  pulse: Animated.Value;
+}) {
+  const clockwise = orbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const anticlockwise = counterOrbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-360deg'] });
+  return (
+    <View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={{
+        position: 'absolute',
+        width: size,
+        height: size,
+        top: -size * 0.18,
+        alignSelf: 'center',
+        transform: [{ scaleY: 0.66 }],
+      }}
+    >
+      <Svg width={size} height={size} viewBox="0 0 360 360" style={{ position: 'absolute' }}>
+        <Defs>
+          <RadialGradient id="mhVortexHalo" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor="#5B16AA" stopOpacity={0.55} />
+            <Stop offset="39%" stopColor="#A13DFA" stopOpacity={0.36} />
+            <Stop offset="72%" stopColor="#198EF5" stopOpacity={0.15} />
+            <Stop offset="100%" stopColor="#080918" stopOpacity={0} />
+          </RadialGradient>
+          <RadialGradient id="mhEventHorizon" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor="#000005" stopOpacity={1} />
+            <Stop offset="65%" stopColor="#070312" stopOpacity={1} />
+            <Stop offset="90%" stopColor="#190C32" stopOpacity={0.95} />
+            <Stop offset="100%" stopColor="#6936B5" stopOpacity={0.25} />
+          </RadialGradient>
+        </Defs>
+        <Circle cx={180} cy={180} r={173} fill="url(#mhVortexHalo)" />
+        <Circle cx={180} cy={180} r={62} fill="url(#mhEventHorizon)" />
+      </Svg>
+      <Animated.View
+        style={{
+          position: 'absolute',
+          width: size,
+          height: size,
+          opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.78, 0.98] }),
+          transform: [{ rotate: clockwise }],
+        }}
+      >
+        <Svg width={size} height={size} viewBox="0 0 360 360">
+          <Defs>
+            <SvgLinearGradient id="mhPurpleArm" x1="0%" y1="0%" x2="100%" y2="100%">
+              <Stop offset="0%" stopColor="#E0B6FF" />
+              <Stop offset="27%" stopColor="#6635DC" />
+              <Stop offset="57%" stopColor="#DB65FF" />
+              <Stop offset="83%" stopColor="#398FFF" />
+              <Stop offset="100%" stopColor="#19DFFF" />
+            </SvgLinearGradient>
+            <SvgLinearGradient id="mhBlueArm" x1="100%" y1="0%" x2="0%" y2="100%">
+              <Stop offset="0%" stopColor="#66E2FF" />
+              <Stop offset="39%" stopColor="#3467E7" />
+              <Stop offset="76%" stopColor="#A85AF9" />
+              <Stop offset="100%" stopColor="#F1B5E9" />
+            </SvgLinearGradient>
+          </Defs>
+          {VORTEX_ARMS.slice(0, 2).map((arm, index) => (
+            <React.Fragment key={index}>
+              <Path
+                d={arm}
+                stroke={index ? 'url(#mhBlueArm)' : 'url(#mhPurpleArm)'}
+                strokeWidth={27}
+                strokeOpacity={0.2}
+                strokeLinecap="round"
+                fill="none"
+              />
+              <Path
+                d={arm}
+                stroke={index ? 'url(#mhBlueArm)' : 'url(#mhPurpleArm)'}
+                strokeWidth={index ? 8.5 : 10.5}
+                strokeOpacity={0.95}
+                strokeLinecap="round"
+                fill="none"
+              />
+              <Path
+                d={arm}
+                stroke="#F6DDFF"
+                strokeWidth={1.8}
+                strokeOpacity={0.68}
+                strokeLinecap="round"
+                fill="none"
+              />
+            </React.Fragment>
+          ))}
+          <Circle cx={180} cy={180} r={51} fill="#07030F" fillOpacity={0.94} />
+        </Svg>
+      </Animated.View>
+      <Animated.View
+        style={{
+          position: 'absolute',
+          width: size,
+          height: size,
+          opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0.76] }),
+          transform: [{ rotate: anticlockwise }],
+        }}
+      >
+        <Svg width={size} height={size} viewBox="0 0 360 360">
+          <Defs>
+            <SvgLinearGradient id="mhSecondaryArm" x1="0%" y1="100%" x2="100%" y2="0%">
+              <Stop offset="0%" stopColor="#53E6FF" />
+              <Stop offset="40%" stopColor="#AF60FF" />
+              <Stop offset="75%" stopColor="#E6A26F" />
+              <Stop offset="100%" stopColor="#FFF0C6" />
+            </SvgLinearGradient>
+          </Defs>
+          {VORTEX_ARMS.slice(2).map((arm, index) => (
+            <React.Fragment key={index}>
+              <Path d={arm} stroke="url(#mhSecondaryArm)" strokeWidth={18} strokeOpacity={0.19} strokeLinecap="round" fill="none" />
+              <Path d={arm} stroke="url(#mhSecondaryArm)" strokeWidth={5.5} strokeOpacity={0.85} strokeLinecap="round" fill="none" />
+            </React.Fragment>
+          ))}
+          <Circle cx={326} cy={106} r={3.4} fill="#F8D8FF" />
+          <Circle cx={59} cy={277} r={2.8} fill="#7DE8FC" />
+        </Svg>
+      </Animated.View>
+    </View>
+  );
+}
+
 export default function MythicAuthScreen({
   mode,
   onChangeMode,
@@ -178,10 +341,10 @@ export default function MythicAuthScreen({
       }),
     ]));
     const clockwise = Animated.loop(Animated.timing(orbit, {
-      toValue: 1, duration: 18000, easing: Easing.linear, useNativeDriver: true,
+      toValue: 1, duration: 12500, easing: Easing.linear, useNativeDriver: true,
     }));
     const counterClockwise = Animated.loop(Animated.timing(counterOrbit, {
-      toValue: 1, duration: 27000, easing: Easing.linear, useNativeDriver: true,
+      toValue: 1, duration: 19300, easing: Easing.linear, useNativeDriver: true,
     }));
     const roomDrift = Animated.loop(Animated.sequence([
       Animated.timing(atmosphere, {
@@ -297,70 +460,11 @@ export default function MythicAuthScreen({
                   justifyContent: 'center',
                 }}
               >
-                {/* Dark accretion core and two counter-rotating orbit trails.
-                    The gold crest remains perfectly readable and does NOT rotate. */}
-                <Animated.View
-                  pointerEvents="none"
-                  style={{
-                    position: 'absolute',
-                    width: compact ? 240 : desktop ? 328 : 287,
-                    height: compact ? 95 : desktop ? 132 : 116,
-                    borderRadius: 999,
-                    borderWidth: 2,
-                    borderTopColor: '#C59BFFB5',
-                    borderRightColor: '#6ABFF467',
-                    borderBottomColor: '#F6B8705C',
-                    borderLeftColor: '#9E55EC15',
-                    opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.48, 0.69] }),
-                    transform: [
-                      { rotate: orbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
-                    ],
-                  }}
-                >
-                  <View style={{
-                    position: 'absolute', top: -4, left: '47%',
-                    width: 6, height: 6, borderRadius: 3,
-                    backgroundColor: '#DFC8FF',
-                    shadowColor: '#BE8BFF', shadowOpacity: 0.8, shadowRadius: 9,
-                  }} />
-                </Animated.View>
-                <Animated.View
-                  pointerEvents="none"
-                  style={{
-                    position: 'absolute',
-                    width: compact ? 222 : desktop ? 301 : 265,
-                    height: compact ? 123 : desktop ? 166 : 148,
-                    borderRadius: 999,
-                    borderWidth: 1.5,
-                    borderTopColor: '#44CEEF70',
-                    borderLeftColor: '#AC74F18A',
-                    borderBottomColor: '#E6C37F36',
-                    borderRightColor: '#664BD51C',
-                    opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.34, 0.52] }),
-                    transform: [
-                      { rotate: counterOrbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-360deg'] }) },
-                    ],
-                  }}
-                >
-                  <View style={{
-                    position: 'absolute', top: -3, left: '50%',
-                    width: 4, height: 4, borderRadius: 2,
-                    backgroundColor: '#5BD8F3',
-                  }} />
-                </Animated.View>
-                <Animated.View
-                  pointerEvents="none"
-                  style={{
-                    position: 'absolute',
-                    width: compact ? 140 : 178,
-                    height: compact ? 140 : 178,
-                    borderRadius: 100,
-                    backgroundColor: '#0C0822',
-                    opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.42, 0.57] }),
-                    shadowColor: '#8746DC',
-                    shadowOpacity: 0.45,
-                    shadowRadius: 34,
-                  }}
+                <MythicVortex
+                  size={compact ? 265 : desktop ? 354 : 310}
+                  orbit={orbit}
+                  counterOrbit={counterOrbit}
+                  pulse={pulse}
                 />
                 <Animated.View
                   style={{
