@@ -3,7 +3,7 @@ import {
   Animated,
   Easing,
   Image,
-  ImageBackground,
+  AccessibilityInfo,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -137,28 +137,71 @@ export default function MythicAuthScreen({
   const desktop = width >= 840;
   const compact = width < 380;
   const [passwordVisible, setPasswordVisible] = useState(false);
+  // Two very slow orbital rings evoke a black-hole accretion swirl.
+  // All movements use native-driver transforms and honor reduced-motion preferences.
   const pulse = useRef(new Animated.Value(0)).current;
+  const orbit = useRef(new Animated.Value(0)).current;
+  const counterOrbit = useRef(new Animated.Value(0)).current;
+  const atmosphere = useRef(new Animated.Value(0)).current;
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 2300,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0,
-          duration: 2300,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ])
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => { if (mounted) setReduceMotion(Boolean(enabled)); })
+      .catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      (enabled) => { if (mounted) setReduceMotion(Boolean(enabled)); }
     );
-    animation.start();
-    return () => animation.stop();
-  }, [pulse]);
+    return () => { mounted = false; subscription.remove(); };
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      pulse.stopAnimation();
+      orbit.stopAnimation();
+      counterOrbit.stopAnimation();
+      atmosphere.stopAnimation();
+      pulse.setValue(0);
+      orbit.setValue(0);
+      counterOrbit.setValue(0);
+      atmosphere.setValue(0);
+      return;
+    }
+    const breathe = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, {
+        toValue: 1, duration: 4100, easing: Easing.inOut(Easing.sin), useNativeDriver: true,
+      }),
+      Animated.timing(pulse, {
+        toValue: 0, duration: 4100, easing: Easing.inOut(Easing.sin), useNativeDriver: true,
+      }),
+    ]));
+    const clockwise = Animated.loop(Animated.timing(orbit, {
+      toValue: 1, duration: 18000, easing: Easing.linear, useNativeDriver: true,
+    }));
+    const counterClockwise = Animated.loop(Animated.timing(counterOrbit, {
+      toValue: 1, duration: 27000, easing: Easing.linear, useNativeDriver: true,
+    }));
+    const roomDrift = Animated.loop(Animated.sequence([
+      Animated.timing(atmosphere, {
+        toValue: 1, duration: 23000, easing: Easing.inOut(Easing.sin), useNativeDriver: true,
+      }),
+      Animated.timing(atmosphere, {
+        toValue: 0, duration: 23000, easing: Easing.inOut(Easing.sin), useNativeDriver: true,
+      }),
+    ]));
+    breathe.start();
+    clockwise.start();
+    counterClockwise.start();
+    roomDrift.start();
+    return () => {
+      breathe.stop();
+      clockwise.stop();
+      counterClockwise.stop();
+      roomDrift.stop();
+    };
+  }, [pulse, orbit, counterOrbit, atmosphere, reduceMotion]);
 
   const formWidth = Math.min(width - (desktop ? 40 : 26), 492);
   const labelStyle = {
@@ -180,9 +223,7 @@ export default function MythicAuthScreen({
         contentContainerStyle={{ flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
       >
-        <ImageBackground
-          source={scene}
-          resizeMode="cover"
+        <View
           style={{
             minHeight: Math.max(height, desktop ? 880 : 780),
             justifyContent: 'center',
@@ -190,10 +231,32 @@ export default function MythicAuthScreen({
             overflow: 'hidden',
           }}
         >
-          {/* Tint the artwork so the real, editable form takes priority. */}
+          {/* Full-bleed room art: gentle 46-second parallax, never a fast slideshow. */}
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: -18,
+              bottom: -18,
+              left: -18,
+              right: -18,
+              transform: [
+                { scale: atmosphere.interpolate({ inputRange: [0, 1], outputRange: [1.02, 1.045] }) },
+                { translateX: atmosphere.interpolate({ inputRange: [0, 1], outputRange: [-5, 5] }) },
+              ],
+            }}
+          >
+            <Image
+              source={scene}
+              resizeMode="cover"
+              accessibilityLabel="Atmospheric MythicHub gaming lounge"
+              style={{ width: '100%', height: '100%' }}
+            />
+          </Animated.View>
+          {/* Quiet vignette: center is dark, both sides keep their artwork. */}
           <LinearGradient
             pointerEvents="none"
-            colors={['#050817B6', '#07091BD9', '#050714C9']}
+            colors={['#05081780', '#060918AC', '#0607169A']}
             style={{
               position: 'absolute',
               top: 0,
@@ -204,7 +267,7 @@ export default function MythicAuthScreen({
           />
           <LinearGradient
             pointerEvents="none"
-            colors={['#AF3AFF55', '#06091708', '#08E9FF55']}
+            colors={['#A453EE22', '#06091702', '#35A5FF17']}
             start={{ x: 0, y: 0.48 }}
             end={{ x: 1, y: 0.55 }}
             style={{
@@ -213,7 +276,7 @@ export default function MythicAuthScreen({
               bottom: 0,
               left: 0,
               right: 0,
-              opacity: desktop ? 0.48 : 0.3,
+              opacity: desktop ? 0.38 : 0.2,
             }}
           />
 
@@ -226,33 +289,99 @@ export default function MythicAuthScreen({
             }}
           >
             <View style={{ alignItems: 'center' }}>
-              <Animated.View
+              <View
                 style={{
+                  width: compact ? 266 : desktop ? 350 : 308,
+                  height: compact ? 199 : desktop ? 245 : 221,
                   alignItems: 'center',
-                  transform: [
-                    {
-                      scale: pulse.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.985, 1.025],
-                      }),
-                    },
-                  ],
-                  opacity: pulse.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.92, 1],
-                  }),
+                  justifyContent: 'center',
                 }}
               >
-                <Image
-                  source={emblem}
-                  resizeMode="contain"
-                  accessibilityLabel="MythicHub gold and amethyst crest"
+                {/* Dark accretion core and two counter-rotating orbit trails.
+                    The gold crest remains perfectly readable and does NOT rotate. */}
+                <Animated.View
+                  pointerEvents="none"
                   style={{
-                    width: compact ? 220 : desktop ? 288 : 254,
-                    height: compact ? 185 : desktop ? 240 : 212,
+                    position: 'absolute',
+                    width: compact ? 240 : desktop ? 328 : 287,
+                    height: compact ? 95 : desktop ? 132 : 116,
+                    borderRadius: 999,
+                    borderWidth: 2,
+                    borderTopColor: '#C59BFFB5',
+                    borderRightColor: '#6ABFF467',
+                    borderBottomColor: '#F6B8705C',
+                    borderLeftColor: '#9E55EC15',
+                    opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.48, 0.69] }),
+                    transform: [
+                      { rotate: orbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
+                    ],
+                  }}
+                >
+                  <View style={{
+                    position: 'absolute', top: -4, left: '47%',
+                    width: 6, height: 6, borderRadius: 3,
+                    backgroundColor: '#DFC8FF',
+                    shadowColor: '#BE8BFF', shadowOpacity: 0.8, shadowRadius: 9,
+                  }} />
+                </Animated.View>
+                <Animated.View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    width: compact ? 222 : desktop ? 301 : 265,
+                    height: compact ? 123 : desktop ? 166 : 148,
+                    borderRadius: 999,
+                    borderWidth: 1.5,
+                    borderTopColor: '#44CEEF70',
+                    borderLeftColor: '#AC74F18A',
+                    borderBottomColor: '#E6C37F36',
+                    borderRightColor: '#664BD51C',
+                    opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.34, 0.52] }),
+                    transform: [
+                      { rotate: counterOrbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-360deg'] }) },
+                    ],
+                  }}
+                >
+                  <View style={{
+                    position: 'absolute', top: -3, left: '50%',
+                    width: 4, height: 4, borderRadius: 2,
+                    backgroundColor: '#5BD8F3',
+                  }} />
+                </Animated.View>
+                <Animated.View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    width: compact ? 140 : 178,
+                    height: compact ? 140 : 178,
+                    borderRadius: 100,
+                    backgroundColor: '#0C0822',
+                    opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.42, 0.57] }),
+                    shadowColor: '#8746DC',
+                    shadowOpacity: 0.45,
+                    shadowRadius: 34,
                   }}
                 />
-              </Animated.View>
+                <Animated.View
+                  style={{
+                    alignItems: 'center',
+                    opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }),
+                    transform: [
+                      { scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.995, 1.01] }) },
+                    ],
+                  }}
+                >
+                  <Image
+                    source={emblem}
+                    resizeMode="contain"
+                    accessibilityLabel="MythicHub gold crest with a slow orbiting black-hole effect"
+                    style={{
+                      width: compact ? 220 : desktop ? 288 : 254,
+                      height: compact ? 185 : desktop ? 240 : 212,
+                    }}
+                  />
+                </Animated.View>
+              </View>
             </View>
 
             <LinearGradient
@@ -500,7 +629,7 @@ export default function MythicAuthScreen({
               Independent MLBB companion • Never enter your MLBB password
             </Text>
           </View>
-        </ImageBackground>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
