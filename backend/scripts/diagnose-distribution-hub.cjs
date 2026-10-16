@@ -3,8 +3,41 @@
 
 // Read-only authenticated API diagnosis. No orders; never prints signing secrets.
 const { createHmac } = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
+const dotenv = require('dotenv');
 const { loadEnvConfig } = require('@next/env');
-loadEnvConfig(process.cwd());
+
+// Mirror Next.js development mode. The default (production) mode can load
+// a different .env.* file than "npm run dev" and yield misleading results.
+const inheritedMember = process.env.DISTRIBUTION_HUB_MEMBER_CODE?.trim();
+loadEnvConfig(process.cwd(), true);
+
+function auditMemberSources() {
+  console.log('Environment audit (Member ID only, last 4 chars):');
+  console.log('  inherited process variable: ' + (inheritedMember ? 'SET, ends in ' + inheritedMember.slice(-4) : 'absent'));
+  let localMember;
+  for (const filename of ['.env.development.local', '.env.local', '.env.development', '.env']) {
+    const filepath = path.join(process.cwd(), filename);
+    if (!fs.existsSync(filepath)) continue;
+    const raw = fs.readFileSync(filepath, 'utf8');
+    const parsed = dotenv.parse(raw);
+    const value = parsed.DISTRIBUTION_HUB_MEMBER_CODE?.trim();
+    const activeLines = raw.split(/\r?\n/).flatMap((line, index) =>
+      /^\s*(?:export\s+)?DISTRIBUTION_HUB_MEMBER_CODE\s*=/.test(line) ? [index + 1] : []);
+    if (filename === '.env.local') localMember = value;
+    console.log('  ' + filename + ': ' +
+      (value ? 'ends in ' + value.slice(-4) : 'no Member ID') +
+      ', active assignments=' + activeLines.length +
+      (activeLines.length > 1 ? ' [duplicate lines ' + activeLines.join(',') + ']' : '') +
+      (value?.toLowerCase().includes('liog-member-code') ? ' [PLACEHOLDER]' : ''));
+  }
+  const effective = process.env.DISTRIBUTION_HUB_MEMBER_CODE?.trim();
+  console.log('  effective value: ' + (effective ? 'ends in ' + effective.slice(-4) : 'absent'));
+  if (localMember && effective && localMember !== effective) {
+    console.log('  WARNING: effective value differs from .env.local; check inherited vars and higher-priority .env.development.local.');
+  }
+}
 
 const member = process.env.DISTRIBUTION_HUB_MEMBER_CODE?.trim();
 const keyId = process.env.DISTRIBUTION_HUB_USERNAME_KEY_ID?.trim();
@@ -51,6 +84,7 @@ async function probe(endpoint, payload) {
 
 async function main() {
   console.log('=== Distribution Hub diagnosis (read-only) ===');
+  auditMemberSources();
   console.log('Auth mode: ' + mode);
   console.log('Member ID present: ' + Boolean(member) + (member ? ', ends in ' + member.slice(-4) : ''));
   console.log('Signing secret present: ' + Boolean(secret));
