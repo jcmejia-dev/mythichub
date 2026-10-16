@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
+import MythicAuthScreen from '../components/MythicAuthScreen';
 import {Animated,Easing,ActivityIndicator,Alert,KeyboardAvoidingView,Platform,ScrollView,Text,TextInput,TouchableOpacity,View,useWindowDimensions} from 'react-native';
 import {router} from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
@@ -50,19 +51,21 @@ export default function Home(){
  const sectionTitle=(title:string,desc:string)=><View style={{marginBottom:22}}><Text style={txt(wide?29:25,C.white,'900')}>{title}</Text><Text style={{...txt(13,C.muted),marginTop:7,lineHeight:21}}>{desc}</Text></View>;
  const metric=(icon:React.ComponentProps<typeof Ionicons>['name'],value:string,label:string,accent:string)=><View style={{...panel({flex:1,minWidth:wide?180:135,padding:17}),marginRight:10,marginBottom:10}}><Ionicons name={icon} size={26} color={accent}/><Text style={{...txt(24,C.white,'900'),marginTop:12}}>{value}</Text><Text style={{...txt(11,C.muted,'600'),marginTop:5}}>{label}</Text></View>;
  const goal=Math.max(1,Number(tracker.targetDiamonds)||1),owned=Math.max(0,Number(tracker.ownedDiamonds)||0),progress=Math.min(100,Math.round(owned/goal*100));
+ if(!loading && API && !user) return <MythicAuthScreen
+  mode={mode}
+  onChangeMode={setMode}
+  email={email}
+  onChangeEmail={setEmail}
+  password={password}
+  onChangePassword={setPassword}
+  name={name}
+  onChangeName={setName}
+  busy={busy}
+  onSubmit={authenticate}
+ />;
  return <KeyboardAvoidingView style={{flex:1,backgroundColor:C.bg}} behavior={Platform.OS==='ios'?'padding':undefined}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{flexGrow:1,paddingBottom:50}}>
   <View style={{height:4,flexDirection:'row',backgroundColor:C.violet}}><View style={{width:'24%',backgroundColor:C.gold}}/><View style={{width:'14%',backgroundColor:C.cyan}}/></View>
-  {loading?<View style={{paddingTop:160}}><ActivityIndicator color={C.violet}/></View>:!API?<View style={{padding:28,marginTop:60}}><Text style={txt(22,C.white,'800')}>Backend setup required</Text><Text style={txt(14,C.muted)}>Set EXPO_PUBLIC_API_URL in the root .env file and restart Expo.</Text></View>:!user?
-  shell(<View style={{maxWidth:460,width:'100%',alignSelf:'center',paddingTop:wide?110:65}}>
-   <View style={{alignItems:'center',marginBottom:33}}><View style={{flexDirection:'row',alignItems:'center',gap:12}}><MaterialCommunityIcons name="controller-classic" size={35} color={C.gold}/><Text style={txt(35,C.gold,'900')}>MYTHICHUB</Text></View><Text style={{...txt(11,C.muted,'800'),letterSpacing:3,marginTop:9}}>YOUR GAMING SANCTUARY</Text></View>
-   <View style={panel({padding:wide?32:22})}><Chip>✦ PRIVATE PLAYER SPACE</Chip><Text style={{...txt(28,C.white,'900'),marginTop:20}}>{mode==='signIn'?'Welcome back, legend.':'Join the lounge.'}</Text><Text style={{...txt(13,C.muted),marginTop:7,lineHeight:20}}>Your progress, collections, and account details stay in your own space.</Text>
-    {mode==='signUp'?<Field label="DISPLAY NAME" value={name} onChange={setName} placeholder="Your gamer name"/>:null}
-    <Field label="EMAIL ADDRESS" value={email} onChange={setEmail} placeholder="you@example.com"/>
-    <Field label="PASSWORD" value={password} onChange={setPassword} placeholder="At least 8 characters" secure/>
-    <Action title={busy?'Please wait…':mode==='signIn'?'Enter MythicHub →':'Create account →'} onPress={authenticate} disabled={busy}/>
-    <Action title={mode==='signIn'?'New here? Create an account':'Already a member? Sign in'} subtle onPress={()=>setMode(mode==='signIn'?'signUp':'signIn')}/>
-   </View><Text style={{...txt(11,C.muted),textAlign:'center',marginTop:18}}>Independent MLBB companion • No game password required</Text>
-  </View>):
+  {loading?<View style={{paddingTop:160}}><ActivityIndicator color={C.violet}/></View>:!API?<View style={{padding:28,marginTop:60}}><Text style={txt(22,C.white,'800')}>Backend setup required</Text><Text style={txt(14,C.muted)}>Set EXPO_PUBLIC_API_URL in the root .env file and restart Expo.</Text></View>:!user?null:
   <>
    <View style={{backgroundColor:'#0A1020',borderBottomWidth:1,borderBottomColor:C.stroke,paddingVertical:19}}>
     {shell(<View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:14}}>
@@ -84,7 +87,7 @@ export default function Home(){
      </View>
     </>:null}
     {tab==='player'?<>
-     {sectionTitle('Player command center','Link your MLBB account privately. Nickname lookup is optional while the provider is unavailable.')}
+     {sectionTitle('Player command center','Link your MLBB account privately and look up your nickname by Player ID and Zone ID. Nickname lookup does not verify account ownership.')}
      <View style={panel({maxWidth:760})}><Chip color={linked?C.green:C.gold}>{linked?'● PROFILE SAVED':'○ NOT LINKED'}</Chip>
       <Field label="PLAYER ID" value={playerId} onChange={updatePlayerId} placeholder="123456789 or 123456789(5039)" number/>
       <Field label="SERVER / ZONE ID" value={serverId} onChange={v=>{setServerId(v);setLookupName(null)}} placeholder="5039" number/>
