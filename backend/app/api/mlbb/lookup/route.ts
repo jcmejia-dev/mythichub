@@ -22,7 +22,19 @@ export async function GET(request:NextRequest){
     method:'POST',headers:{'Content-Type':'application/json','x-liog-sign':signature,...(scopedKeyId?{'X-LIOG-KEY-ID':scopedKeyId}:{})},
     body:raw,signal:AbortSignal.timeout(8000),cache:'no-store'
    });
-   if(!response.ok){const reason=response.status===401||response.status===403?'API access denied. Confirm the Member ID, selected signing Secret, scoped key permission, and provider restrictions.':response.status===429?'Nickname lookup rate limit reached. Try again later.':response.status>=500?'Distribution Hub service is temporarily unavailable.':'Distribution Hub rejected the lookup request. Check the provider API documentation and account permissions.';return NextResponse.json({nickname:null,available:false,message:reason,providerStatus:response.status});}
+   if(!response.ok){
+    // Do not forward raw provider responses: they may contain credentials or sensitive data.
+    const providerText=await response.text();
+    let providerCode:string|undefined;
+    try {
+      const error=JSON.parse(providerText);
+      const candidate=error?.code??error?.error_code??(typeof error?.error==='string'?error.error:undefined);
+      if(typeof candidate==='string' && /^[a-zA-Z0-9_-]{1,64}$/.test(candidate))providerCode=candidate;
+    }catch{}
+    const reason=response.status===401?'Distribution Hub rejected the API signature or credentials (401).':response.status===403?'Distribution Hub denied API permission (403).':response.status===429?'Nickname lookup rate limit reached. Try again later.':response.status>=500?'Distribution Hub service is temporarily unavailable.':'Distribution Hub rejected the lookup request.';
+    console.error('[mlbb-lookup] Provider rejected request', {status:response.status,providerCode:providerCode??'not-provided',authMode:scopedKeyId?'scoped':'account',hasMemberCode:Boolean(memberCode)});
+    return NextResponse.json({nickname:null,available:false,message:reason,providerStatus:response.status,providerCode:providerCode??null,authMode:scopedKeyId?'scoped':'account'},{status:response.status});
+   }
    const data=await response.json();
    const nickname=typeof data?.username==='string'?data.username.trim():typeof data?.nickname==='string'?data.nickname.trim():'';
    if((data?.ok||data?.success)&&data?.found!==false&&nickname&&nickname.length<=80)
