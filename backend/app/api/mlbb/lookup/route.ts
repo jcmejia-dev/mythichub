@@ -13,6 +13,10 @@ export async function GET(request:NextRequest){
  const scopedKeyId=process.env.DISTRIBUTION_HUB_USERNAME_KEY_ID?.trim();
  const scopedSecret=process.env.DISTRIBUTION_HUB_USERNAME_KEY_SECRET?.trim();
  const secret=scopedKeyId?scopedSecret:process.env.DISTRIBUTION_HUB_SECRET?.trim();
+ // Reject template credentials locally rather than sending them to Distribution Hub.
+ if(memberCode?.toLowerCase().includes('liog-member-code')){
+  return NextResponse.json({nickname:null,available:false,providerCode:'placeholder_member',authMode:scopedKeyId?'scoped':'account',message:'The running backend is loading the example Member Code rather than your active Distribution Hub credentials. Check backend environment-file precedence and restart.'},{status:503});
+ }
  if(scopedKeyId&&!scopedSecret)return NextResponse.json({nickname:null,available:false,message:'Scoped username key is configured without its Secret. Set DISTRIBUTION_HUB_USERNAME_KEY_SECRET on the backend.'});
  if(memberCode&&secret){
   try{
