@@ -150,6 +150,121 @@ const VORTEX_ARMS = [
   makeSpiral(4.7, 76, 155, 0.84),
 ];
 
+
+/**
+ * Web-only vortex: native CSS animations are independent of React Native's
+ * Animated native driver, which can render the rings without advancing them
+ * in Expo Web. Each SVG layer is a normal DOM element with real keyframes.
+ */
+function MythicVortexWeb({ size }: { size: number }) {
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const tag = document.createElement('style');
+    tag.setAttribute('data-mythichub-vortex-styles', 'css-keyframes-v1');
+    tag.textContent = [
+      '@keyframes mh-vortex-clockwise { from {transform: rotate(0deg);} to {transform: rotate(360deg);} }',
+      '@keyframes mh-vortex-counterclockwise { from {transform: rotate(0deg);} to {transform: rotate(-360deg);} }',
+      '@keyframes mh-vortex-glow { 0%, 100% {opacity:.68;} 50% {opacity:.95;} }',
+      '.mh-vortex-front {animation: mh-vortex-clockwise 5.4s linear infinite !important; will-change: transform; transform-origin: 50% 50%;}',
+      '.mh-vortex-back {animation: mh-vortex-counterclockwise 8.3s linear infinite !important; will-change: transform; transform-origin: 50% 50%;}',
+      '.mh-vortex-glow {animation: mh-vortex-glow 3.6s ease-in-out infinite;}',
+      '@media (prefers-reduced-motion: reduce) {.mh-vortex-front, .mh-vortex-back, .mh-vortex-glow {animation:none !important;}}',
+    ].join('\n');
+    document.head.appendChild(tag);
+    return () => { tag.remove(); };
+  }, []);
+
+  const layer: React.CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    transformOrigin: '50% 50%',
+  };
+
+  return React.createElement('div', {
+    'data-mh-vortex': 'web-css-keyframes',
+    'aria-hidden': 'true',
+    style: {
+      position: 'absolute',
+      top: -size * 0.18,
+      left: '50%',
+      width: size,
+      height: size,
+      transform: 'translateX(-50%) scaleY(0.66)',
+      pointerEvents: 'none',
+    },
+  },
+  <Svg width={size} height={size} viewBox="0 0 360 360" style={{ position:'absolute' }}>
+    <Defs>
+      <RadialGradient id="mhWebOuterHalo" cx="50%" cy="50%" r="50%">
+        <Stop offset="0%" stopColor="#7F37E6" stopOpacity={0.36} />
+        <Stop offset="47%" stopColor="#742FCC" stopOpacity={0.34} />
+        <Stop offset="75%" stopColor="#3289FF" stopOpacity={0.15} />
+        <Stop offset="100%" stopColor="#080918" stopOpacity={0} />
+      </RadialGradient>
+      <RadialGradient id="mhWebBlackHole" cx="50%" cy="50%" r="50%">
+        <Stop offset="0%" stopColor="#010009" />
+        <Stop offset="65%" stopColor="#04010C" />
+        <Stop offset="90%" stopColor="#1B0A34" />
+        <Stop offset="100%" stopColor="#4D21A3" stopOpacity={0.22} />
+      </RadialGradient>
+    </Defs>
+    <Circle cx={180} cy={180} r={175} fill="url(#mhWebOuterHalo)" />
+    <Circle cx={180} cy={180} r={60} fill="url(#mhWebBlackHole)" />
+  </Svg>,
+  React.createElement('div', {
+    className:'mh-vortex-front',
+    'data-mh-vortex-ring':'front',
+    style:{...layer, filter:'drop-shadow(0 0 6px rgba(158,88,255,.74))'},
+  },
+  <Svg width={size} height={size} viewBox="0 0 360 360">
+    <Defs>
+      <SvgLinearGradient id="mhWebFrontPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+        <Stop offset="0%" stopColor="#FBDAFF" />
+        <Stop offset="18%" stopColor="#874EFF" />
+        <Stop offset="47%" stopColor="#D968FF" />
+        <Stop offset="73%" stopColor="#4876FF" />
+        <Stop offset="100%" stopColor="#20D7FF" />
+      </SvgLinearGradient>
+      <SvgLinearGradient id="mhWebFrontBlue" x1="100%" y1="0%" x2="0%" y2="100%">
+        <Stop offset="0%" stopColor="#98ECFF" />
+        <Stop offset="31%" stopColor="#3385FE" />
+        <Stop offset="66%" stopColor="#AC63FC" />
+        <Stop offset="100%" stopColor="#F9C1FC" />
+      </SvgLinearGradient>
+    </Defs>
+    {VORTEX_ARMS.slice(0,2).map((arm,i)=><React.Fragment key={i}>
+      <Path d={arm} fill="none" stroke={i?'url(#mhWebFrontBlue)':'url(#mhWebFrontPurple)'} strokeWidth={29} strokeOpacity={0.18} strokeLinecap="round" />
+      <Path d={arm} fill="none" stroke={i?'url(#mhWebFrontBlue)':'url(#mhWebFrontPurple)'} strokeWidth={i?9:11} strokeOpacity={0.96} strokeLinecap="round" />
+      <Path d={arm} fill="none" stroke="#E6DDFF" strokeWidth={1.6} strokeOpacity={0.65} strokeLinecap="round" />
+    </React.Fragment>)}
+    <Circle cx={316} cy={88} r={4} fill="#FFF2FF" />
+    <Circle cx={53} cy={240} r={3} fill="#6EEAFF" />
+  </Svg>),
+  React.createElement('div', {
+    className:'mh-vortex-back',
+    'data-mh-vortex-ring':'back',
+    style:{...layer, filter:'drop-shadow(0 0 4px rgba(80,182,255,.58))',opacity:.82},
+  },
+  <Svg width={size} height={size} viewBox="0 0 360 360">
+    <Defs>
+      <SvgLinearGradient id="mhWebBackGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+        <Stop offset="0%" stopColor="#51DFFF" />
+        <Stop offset="39%" stopColor="#AC5BFF" />
+        <Stop offset="73%" stopColor="#E6A57A" />
+        <Stop offset="100%" stopColor="#FFF1CB" />
+      </SvgLinearGradient>
+    </Defs>
+    {VORTEX_ARMS.slice(2).map((arm,i)=><React.Fragment key={i}>
+      <Path d={arm} fill="none" stroke="url(#mhWebBackGradient)" strokeWidth={20} strokeOpacity={0.22} strokeLinecap="round" />
+      <Path d={arm} fill="none" stroke="url(#mhWebBackGradient)" strokeWidth={6.5} strokeOpacity={0.95} strokeLinecap="round" />
+    </React.Fragment>)}
+    <Circle cx={304} cy={119} r={3.6} fill="#F1E3FF" />
+    <Circle cx={75} cy={292} r={3.1} fill="#55DFFF" />
+  </Svg>));
+}
+
 /** A genuinely visible purple/cyan black-hole vortex; no video or GPU shader required. */
 function MythicVortex({
   size,
@@ -162,6 +277,7 @@ function MythicVortex({
   counterOrbit: Animated.Value;
   pulse: Animated.Value;
 }) {
+  if (Platform.OS === 'web') return <MythicVortexWeb size={size} />;
   const clockwise = orbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   const anticlockwise = counterOrbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-360deg'] });
   return (
