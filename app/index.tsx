@@ -9,7 +9,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 const API=process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/,'');
 const C={bg:'#070A10',panel:'#101622',panel2:'#1B2333',stroke:'#3B4559',gold:'#F6C75D',violet:'#A25AFF',cyan:'#4CE5EF',white:'#F6F8FC',muted:'#A5B1C7',green:'#7FE6B6'};
 type User={id:string;email:string;name:string};
-type Tab='home'|'player'|'collection'|'budget'|'trade'|'settings';
+type Tab='home'|'player'|'collection'|'budget'|'trade'|'community'|'settings';
 type Tracker={skins:string[];ownedDiamonds:string;targetDiamonds:string;magicPoints:string;notes:string};
 const initial:Tracker={skins:[],ownedDiamonds:'0',targetDiamonds:'1000',magicPoints:'0',notes:''};
 const authKey='mythichub_auth_token';
@@ -37,16 +37,59 @@ export default function Home(){
  useEffect(()=>{const loop=Animated.loop(Animated.sequence([Animated.timing(glow,{toValue:1,duration:2400,easing:Easing.inOut(Easing.sin),useNativeDriver:true}),Animated.timing(glow,{toValue:0,duration:2400,easing:Easing.inOut(Easing.sin),useNativeDriver:true})]));loop.start();return()=>loop.stop()},[glow]);
  const notify=(title:string,message:string)=>Platform.OS==='web'?window.alert(title+': '+message):Alert.alert(title,message);
  useEffect(()=>{let active=true;(async()=>{try{const stored=await readToken();const {data}=await request('/api/auth/get-session','GET',undefined,stored);if(active){setToken(stored);setUser(data?.user??null)}}catch{}finally{if(active)setLoading(false)}})();return()=>{active=false}},[]);
- useEffect(()=>{if(!user){setTrackerReady(false);return;}let active=true;request('/api/profile','GET',undefined,token).then(({data})=>{if(!active)return;const p=data.profile;if(p){setPlayerId(p.playerId);setServerId(p.serverId);setNickname(p.nickname??'');setLinked(true)}else{setLinked(false);setPlayerId('');setServerId('');setNickname('')}}).catch(()=>{});AsyncStorage.getItem('mythichub:tracker:'+user.id).then(v=>{if(active){if(v){try{const parsed=JSON.parse(v);setTracker({...initial,...parsed,skins:Array.isArray(parsed.skins)?parsed.skins:[]})}catch{setTracker(initial)}}else setTracker(initial);setTrackerReady(true)}}).catch(()=>{if(active)setTrackerReady(true)});return()=>{active=false}},[user?.id,token]);
+ const [syncStatus,setSyncStatus]=useState<'loading'|'cloud'|'local'>('loading');
+ useEffect(()=>{if(!user){setTrackerReady(false);setSyncStatus('loading');return;}let active=true;
+  request('/api/profile','GET',undefined,token).then(({data})=>{if(!active)return;const p=data.profile;if(p){setPlayerId(p.playerId);setServerId(p.serverId);setNickname(p.nickname??'');setLinked(true)}else{setLinked(false);setPlayerId('');setServerId('');setNickname('')}}).catch(()=>{});
+  (async()=>{
+   let local=initial;
+   try {
+    const raw=await AsyncStorage.getItem('mythichub:tracker:'+user.id);
+    if(raw){const parsed=JSON.parse(raw);local={...initial,...parsed,skins:Array.isArray(parsed.skins)?parsed.skins:[]};}
+   }catch{}
+   let cloud:Tracker|null=null, online=false;
+   try {
+    const {data}=await request('/api/tracker','GET',undefined,token);
+    online=true;
+    if(data?.tracker && Array.isArray(data.tracker.skins)){
+      cloud={...initial,...data.tracker,skins:data.tracker.skins};
+    }
+   }catch{}
+   if(active){setTracker(cloud??local);setSyncStatus(online?'cloud':'local');setTrackerReady(true);}
+  })();
+  return()=>{active=false};
+ },[user?.id,token]);
  useEffect(()=>{if(user&&trackerReady)AsyncStorage.setItem('mythichub:tracker:'+user.id,JSON.stringify(tracker)).catch(()=>{})},[tracker,user?.id,trackerReady]);
+ useEffect(()=>{
+  if(!user||!trackerReady)return;
+  const handle=setTimeout(async()=>{
+   const normalized={...tracker,
+    ownedDiamonds:tracker.ownedDiamonds||'0',
+    targetDiamonds:tracker.targetDiamonds||'0',
+    magicPoints:tracker.magicPoints||'0',
+   };
+   try{await request('/api/tracker','PUT',normalized,token);setSyncStatus('cloud');}
+   catch{setSyncStatus('local');}
+  },1000);
+  return()=>clearTimeout(handle);
+ },[tracker,trackerReady,user?.id,token]);
+
  async function authenticate(){if(!email.trim()||password.length<8||mode==='signUp'&&!name.trim()){notify('Check details','Enter email, password (at least 8 characters), and a name for sign up.');return}setBusy(true);try{const {data,response}=await request('/api/auth/'+(mode==='signIn'?'sign-in/email':'sign-up/email'),'POST',mode==='signIn'?{email:email.trim(),password}:{name:name.trim(),email:email.trim(),password});const bearer=response.headers.get('set-auth-token');if(Platform.OS!=='web'&&!bearer)throw new Error('Authentication token missing');await writeToken(bearer);setToken(bearer);setUser(data.user??null);setPassword('')}catch(e){notify('Authentication failed',e instanceof Error?e.message:String(e))}finally{setBusy(false)}}
  function updatePlayerId(v:string){const m=v.trim().match(/^(\d{5,15})\s*\(\s*(\d{3,8})\s*\)$/);if(m){setPlayerId(m[1]);setServerId(m[2])}else setPlayerId(v);setLookupName(null);setLookupStatus('')}
  async function lookup(){if(!/^\d{5,15}$/.test(playerId.trim())||!/^\d{3,8}$/.test(serverId.trim())){notify('Check IDs','Enter valid Player and Zone IDs.');return}setBusy(true);setLookupStatus('Looking up nickname…');setLookupName(null);try{const {data}=await request('/api/mlbb/lookup?playerId='+encodeURIComponent(playerId.trim())+'&serverId='+encodeURIComponent(serverId.trim()),'GET',undefined,token);if(data?.nickname){setLookupName(data.nickname);setLookupStatus('Nickname found. Confirm below.')}else setLookupStatus(data?.message??'Lookup is unavailable. You can still save your IDs.')}catch(e){setLookupStatus(e instanceof Error?e.message:'Lookup unavailable. You can still save your IDs.')}finally{setBusy(false)}}
  async function save(){if(!/^\d{5,15}$/.test(playerId.trim())||!/^\d{3,8}$/.test(serverId.trim())){notify('Invalid IDs','Player ID must be 5–15 digits and Zone ID 3–8 digits.');return}setBusy(true);try{await request('/api/profile','PUT',{playerId:playerId.trim(),serverId:serverId.trim(),nickname:nickname.trim().slice(0,40)},token);setLinked(true);notify('Profile saved','Your MLBB identifiers were saved privately. Ownership remains unverified.')}catch(e){notify('Save failed',e instanceof Error?e.message:String(e))}finally{setBusy(false)}}
- async function signOut(){setBusy(true);try{await request('/api/auth/sign-out','POST',{},token)}catch{}finally{await writeToken(null);setToken(null);setUser(null);setTracker(initial);setTab('home');setBusy(false)}}
+ async function signOut(){setBusy(true);try{await request('/api/auth/sign-out','POST',{},token)}catch{}finally{await writeToken(null);setToken(null);setUser(null);setTracker(initial);setSyncStatus('loading');setTab('home');setBusy(false)}}
  const update=(key:keyof Tracker,value:string)=>setTracker(p=>({...p,[key]:value}));
  function switchTab(next:Tab){if(next===tab)return;fade.setValue(0);slide.setValue(12);setTab(next);Animated.parallel([Animated.timing(fade,{toValue:1,duration:230,easing:Easing.out(Easing.cubic),useNativeDriver:true}),Animated.timing(slide,{toValue:0,duration:260,easing:Easing.out(Easing.cubic),useNativeDriver:true})]).start()}
- const nav:[Tab,React.ComponentProps<typeof Ionicons>['name'],string][]=[['home','grid-outline','Dashboard'],['player','game-controller-outline','My Player'],['collection','albums-outline','Collection'],['budget','diamond-outline','Diamond Vault'],['trade','shield-checkmark-outline','Secure Trade'],['settings','settings-outline','Settings']];
+ const nav:[Tab|'topup',React.ComponentProps<typeof Ionicons>['name'],string][]=[
+ ['home','grid-outline','Dashboard'],
+ ['player','game-controller-outline','My Player'],
+ ['collection','albums-outline','Collection'],
+ ['budget','diamond-outline','Diamond Vault'],
+ ['topup','cart-outline','Top-Up Store'],
+ ['trade','shield-checkmark-outline','Secure Trade'],
+ ['community','people-outline','Community'],
+ ['settings','settings-outline','Settings']
+ ];
  const shell=(children:React.ReactNode)=><View style={{maxWidth:1220,width:'100%',alignSelf:'center',paddingHorizontal:wide?28:17}}>{children}</View>;
  const sectionTitle=(title:string,desc:string)=><View style={{marginBottom:22}}><Text style={txt(wide?29:25,C.white,'900')}>{title}</Text><Text style={{...txt(13,C.muted),marginTop:7,lineHeight:21}}>{desc}</Text></View>;
  const metric=(icon:React.ComponentProps<typeof Ionicons>['name'],value:string,label:string,accent:string)=><View style={{...panel({flex:1,minWidth:wide?180:135,padding:17}),marginRight:10,marginBottom:10}}><Ionicons name={icon} size={26} color={accent}/><Text style={{...txt(24,C.white,'900'),marginTop:12}}>{value}</Text><Text style={{...txt(11,C.muted,'600'),marginTop:5}}>{label}</Text></View>;
@@ -69,18 +112,42 @@ export default function Home(){
   <>
    <View style={{backgroundColor:'#0A1020',borderBottomWidth:1,borderBottomColor:C.stroke,paddingVertical:19}}>
     {shell(<View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:14}}>
-     <View><View style={{flexDirection:'row',alignItems:'center',gap:12}}><Animated.View style={{opacity:glow.interpolate({inputRange:[0,1],outputRange:[0.55,1]}),transform:[{scale:glow.interpolate({inputRange:[0,1],outputRange:[0.94,1.09]})}]}}><MaterialCommunityIcons name="controller-classic" size={31} color={C.gold}/></Animated.View><Text style={txt(24,C.gold,'900')}>MYTHICHUB</Text></View><Text style={{...txt(10,C.muted,'800'),letterSpacing:2,marginTop:3}}>THE GAMING LOUNGE</Text></View>
+     <View><View style={{flexDirection:'row',alignItems:'center',gap:12}}><Animated.View style={{opacity:glow.interpolate({inputRange:[0,1],outputRange:[0.55,1]}),transform:[{scale:glow.interpolate({inputRange:[0,1],outputRange:[0.94,1.09]})}]}}><MaterialCommunityIcons name="controller-classic" size={31} color={C.gold}/></Animated.View><Text style={txt(24,C.gold,'900')}>MYTHICHUB</Text></View><Text style={{...txt(10,C.muted,'800'),letterSpacing:2,marginTop:3}}>THE GAMING LOUNGE • PLAYER HUB</Text></View>
      <View style={{flexDirection:'row',alignItems:'center',gap:9}}><Chip color={C.green}>● PRIVATE SPACE</Chip><TouchableOpacity onPress={()=>switchTab('settings')} style={{backgroundColor:C.panel2,padding:12,borderRadius:2}}><Text style={txt(14,C.gold,'900')}>{(user.name||'P').slice(0,1).toUpperCase()}</Text></TouchableOpacity></View>
     </View>)}
    </View>
-   {shell(<View style={{flexDirection:'row',flexWrap:'wrap',gap:8,paddingVertical:17}}>{nav.map(([id,icon,label])=><TouchableOpacity key={id} onPress={()=>switchTab(id)} style={{backgroundColor:tab===id?C.violet:C.panel,borderWidth:1,borderColor:tab===id?C.violet:C.stroke,paddingHorizontal:wide?18:12,paddingVertical:12,borderRadius:2}}><View style={{flexDirection:'row',alignItems:'center',gap:9}}><Ionicons name={icon} size={17} color={tab===id?C.bg:C.cyan}/><Text style={txt(12,tab===id?C.bg:C.muted,'800')}>{label}</Text></View></TouchableOpacity>)}</View>)}
+   {shell(<View style={{flexDirection:'row',flexWrap:'wrap',gap:8,paddingVertical:17}}>{nav.map(([id,icon,label])=><TouchableOpacity key={id} onPress={()=>id==='topup'?router.push('/topup'):switchTab(id)} style={{backgroundColor:tab===id?C.violet:C.panel,borderWidth:1,borderColor:tab===id?C.violet:C.stroke,paddingHorizontal:wide?18:12,paddingVertical:12,borderRadius:2}}><View style={{flexDirection:'row',alignItems:'center',gap:9}}><Ionicons name={icon} size={17} color={tab===id?C.bg:C.cyan}/><Text style={txt(12,tab===id?C.bg:C.muted,'800')}>{label}</Text></View></TouchableOpacity>)}</View>)}
    {shell(<Animated.View style={{paddingTop:wide?20:8,opacity:fade,transform:[{translateY:slide}]}}>
     {tab==='home'?<>
      <View style={{...panel({padding:wide?30:21}),backgroundColor:'#19132F',borderColor:C.violet,marginBottom:20,overflow:'hidden'}}>
-      <Chip color={C.gold}>⚡ GAMER COMMAND CENTER</Chip><Animated.View pointerEvents="none" style={{position:'absolute',right:22,top:20,opacity:glow.interpolate({inputRange:[0,1],outputRange:[0.14,0.38]}),transform:[{scale:glow.interpolate({inputRange:[0,1],outputRange:[0.94,1.08]})}]}}><MaterialCommunityIcons name="controller-classic" size={wide?160:90} color={C.violet}/></Animated.View><Text style={{...txt(wide?33:27,C.white,'900'),marginTop:15}}>Ready to climb, {user.name?.split(' ')[0]||'Legend'}?</Text><Text style={{...txt(14,C.muted),marginTop:9,maxWidth:590,lineHeight:23}}>Your command center for player identity, collections, diamond goals, and future top-ups. Built for players, not clutter.</Text>
+      <Chip color={C.gold}>⚡ GAMER COMMAND CENTER</Chip><Animated.View pointerEvents="none" style={{position:'absolute',right:22,top:20,opacity:glow.interpolate({inputRange:[0,1],outputRange:[0.14,0.38]}),transform:[{scale:glow.interpolate({inputRange:[0,1],outputRange:[0.94,1.08]})}]}}><MaterialCommunityIcons name="controller-classic" size={wide?160:90} color={C.violet}/></Animated.View><Text style={{...txt(wide?33:27,C.white,'900'),marginTop:15}}>Ready to climb, {user.name?.split(' ')[0]||'Legend'}?</Text><Text style={{...txt(14,C.muted),marginTop:9,maxWidth:590,lineHeight:23}}>All your MythicHub tools are here: account linking, skin collection, diamond goals, top-up planning, secure-trade information, and the community lounge.</Text>
       <View style={{flexDirection:'row',flexWrap:'wrap',gap:10,marginTop:14}}><Action title="View my player →" onPress={()=>switchTab('player')}/><Action title="Explore top-ups ↗" subtle onPress={()=>router.push('/topup')}/></View>
      </View>
      <View style={{flexDirection:'row',flexWrap:'wrap'}}>{metric('game-controller-outline',linked?'Linked':'Not linked','MLBB account',C.cyan)}{metric('albums-outline',String(tracker.skins.length),'Skins tracked',C.violet)}{metric('diamond-outline',owned.toLocaleString(),'Diamonds logged',C.gold)}{metric('sparkles-outline',Math.min(100,Math.max(0,Number(tracker.magicPoints)||0))+'/100','Magic Wheel progress',C.green)}</View>
+     <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginTop:24,marginBottom:12,flexWrap:'wrap',gap:10}}>
+      <View><Text style={txt(22,C.white,'900')}>Explore the gaming hub</Text><Text style={{...txt(12,C.muted),marginTop:5}}>Every MythicHub section, all in one place.</Text></View>
+      <Chip color={syncStatus==='cloud'?C.green:C.gold}>{syncStatus==='cloud'?'● CLOUD SYNC':'● DEVICE BACKUP'}</Chip>
+     </View>
+     <View style={{flexDirection:'row',flexWrap:'wrap',gap:12}}>
+      {([
+       ['game-controller-outline','My Player','Link IDs, look up the real nickname and save it privately.','LIVE',C.cyan,'player'],
+       ['albums-outline','Skin Collection','Record, organize and revisit your favorite MLBB skins.','TRACKER',C.violet,'collection'],
+       ['diamond-outline','Diamond Vault','Set diamond targets, track Magic Wheel points and notes.','TRACKER',C.gold,'budget'],
+       ['cart-outline','Top-Up Planner','Browse planned packages and calculate prices in PHP.','NO CHECKOUT',C.gold,'topup'],
+       ['shield-checkmark-outline','Secure Trade','Review the protected-trade process and safety rules.','PROTOTYPE',C.green,'trade'],
+       ['people-outline','Community Lounge','See the roadmap for squads, players and social tools.','PLANNED',C.cyan,'community'],
+      ] as const).map(([icon,title,detail,status,accent,target])=>
+       <TouchableOpacity key={title} accessibilityRole="button" onPress={()=>target==='topup'?router.push('/topup'):switchTab(target)} style={{...panel({minWidth:wide?310:Math.max(160,(width-52)/2),flexGrow:1,flexBasis:wide?'30%':'46%',padding:18}),borderTopWidth:3,borderTopColor:accent}}>
+        <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',gap:8}}>
+         <Ionicons name={icon} size={26} color={accent}/>
+         <Text style={txt(10,accent,'900')}>{status}</Text>
+        </View>
+        <Text style={{...txt(17,C.white,'900'),marginTop:15}}>{title}</Text>
+        <Text style={{...txt(12,C.muted),marginTop:8,lineHeight:19,minHeight:50}}>{detail}</Text>
+        <Text style={{...txt(12,accent,'800'),marginTop:10}}>OPEN  →</Text>
+       </TouchableOpacity>
+      )}
+     </View>
      <View style={{flexDirection:wide?'row':'column',gap:15,marginTop:10}}>
       <View style={panel({flex:1})}><Text style={txt(17,C.white,'900')}>◎ Player identity</Text><Text style={{...txt(13,C.muted),marginTop:9,lineHeight:21}}>{linked?'Saved Player ID: '+playerId+' ('+serverId+')':'Link your game account without needing nickname verification.'}</Text><Action title={linked?'Manage profile':'Link account'} subtle onPress={()=>switchTab('player')}/></View>
       <View style={panel({flex:1})}><Text style={txt(17,C.white,'900')}>◈ Diamond goal</Text><Text style={{...txt(13,C.muted),marginTop:9}}>{owned.toLocaleString()} / {goal.toLocaleString()} diamonds</Text><View style={{height:9,backgroundColor:C.panel2,borderRadius:10,marginTop:17,overflow:'hidden'}}><View style={{width:progress+'%',height:'100%',backgroundColor:C.violet,borderRadius:10}}/></View><Action title="Open vault" subtle onPress={()=>switchTab('budget')}/></View>
@@ -114,7 +181,7 @@ export default function Home(){
       <View style={panel({flex:1})}><Chip color={C.gold}>◈ SAVINGS TRACKER</Chip><Field label="DIAMONDS CURRENTLY SAVED" value={tracker.ownedDiamonds} onChange={v=>update('ownedDiamonds',v.replace(/[^\d]/g,''))} number/><Field label="DIAMOND GOAL" value={tracker.targetDiamonds} onChange={v=>update('targetDiamonds',v.replace(/[^\d]/g,''))} number/><Text style={{...txt(15,C.white,'800'),marginTop:20}}>{progress}% of your goal</Text><View style={{height:12,backgroundColor:C.panel2,borderRadius:10,marginTop:12,overflow:'hidden'}}><View style={{height:'100%',width:progress+'%',backgroundColor:C.gold}}/></View><Text style={{...txt(12,C.muted),marginTop:11}}>{Math.max(0,goal-owned).toLocaleString()} diamonds to go</Text></View>
       <View style={panel({flex:1})}><Chip color={C.violet}>✦ MAGIC WHEEL</Chip><Text style={{...txt(13,C.muted),marginTop:18,lineHeight:21}}>Track your Magic Wheel points manually. This is not connected to the game.</Text><Field label="CURRENT POINTS (0–100)" value={tracker.magicPoints} onChange={v=>update('magicPoints',String(Math.min(100,Number(v.replace(/[^\d]/g,''))||0)))} number/><Text style={{...txt(27,C.violet,'900'),marginTop:20}}>{Math.min(100,Number(tracker.magicPoints)||0)} / 100</Text><View style={{height:12,backgroundColor:C.panel2,borderRadius:10,marginTop:12,overflow:'hidden'}}><View style={{height:'100%',width:Math.min(100,Number(tracker.magicPoints)||0)+'%',backgroundColor:C.violet}}/></View></View>
      </View>
-     <View style={panel({marginTop:16})}><Text style={txt(16,C.white,'900')}>Personal notes</Text><Field label="REMINDERS / PLANS" value={tracker.notes} onChange={v=>update('notes',v.slice(0,500))} placeholder="Next skin to save for, event goals…"/><Text style={{...txt(11,C.muted),marginTop:10}}>Your tracker changes save automatically on this device, separated by your MythicHub account.</Text></View>
+     <View style={panel({marginTop:16})}><Text style={txt(16,C.white,'900')}>Personal notes</Text><Field label="REMINDERS / PLANS" value={tracker.notes} onChange={v=>update('notes',v.slice(0,500))} placeholder="Next skin to save for, event goals…"/><Text style={{...txt(11,C.muted),marginTop:10}}>Tracker changes save automatically on this device. Private cloud sync: {syncStatus==='cloud'?'connected':'not yet connected'} (the rest stays available offline).</Text></View>
     </>:null}
     {tab==='trade'?<>
      {sectionTitle('SECURE TRADE // ESCROW LAB','A proposed protected trading workflow. No funds are accepted, held, or released by MythicHub yet.')}
@@ -122,9 +189,32 @@ export default function Home(){
      <View style={{flexDirection:wide?'row':'column',gap:12}}>{[['01','Create trade','Buyer and seller agree on item, price and terms.'],['02','Secure payment','Authorized payment partner confirms funds. No receipt screenshots as proof.'],['03','Deliver & review','Seller fulfills; buyer confirms or raises a dispute.'],['04','Release or refund','Partner releases or refunds after policy-based resolution.']].map(([n,title,desc])=><View key={n} style={panel({flex:1})}><Text style={txt(22,C.violet,'900')}>{n}</Text><Text style={{...txt(16,C.white,'900'),marginTop:15}}>{title}</Text><Text style={{...txt(12,C.muted),marginTop:9,lineHeight:21}}>{desc}</Text></View>)}</View>
      <View style={panel({marginTop:16})}><Text style={txt(16,C.gold,'900')}>Protection is not a guarantee</Text><Text style={{...txt(12,C.muted),marginTop:10,lineHeight:21}}>Scams, stolen accounts, chargebacks and disputed delivery can still occur. MythicHub must not claim zero risk. Trade creation, deposits, escrow and payout are disabled pending legal, payment-provider and security review.</Text><Action title="Secure trades are not live yet" disabled onPress={()=>{}}/></View>
     </>:null}
+    {tab==='community'?<>
+     {sectionTitle('Community lounge','The home for future squads, discovery and player conversations. Multiplayer features are not active yet.')}
+     <View style={{...panel({marginBottom:18,padding:26}),backgroundColor:'#19142F',borderColor:C.violet}}>
+      <Chip color={C.gold}>✦ COMMUNITY ROADMAP</Chip>
+      <Text style={{...txt(wide?27:23,C.white,'900'),marginTop:17}}>Better games. Better people.</Text>
+      <Text style={{...txt(13,C.muted),marginTop:10,lineHeight:22,maxWidth:730}}>Your personal player tools are already usable. Shared community functions will only be enabled when profiles, moderation, reporting, privacy controls, and a real backend are ready. No invented player counts or mock conversations.</Text>
+     </View>
+     <View style={{flexDirection:wide?'row':'column',gap:14}}>
+      {([
+       ['people-outline','Player discovery','Opt-in player profiles and finding gaming friends.'],
+       ['chatbubbles-outline','Squad discussions','Moderated group chat, reports and blocking.'],
+       ['trophy-outline','Collection showcases','Share selected skins without exposing private identifiers.'],
+      ] as const).map(([icon,title,detail])=>
+       <View key={title} style={panel({flex:1})}>
+        <Ionicons name={icon} size={29} color={C.cyan}/>
+        <Text style={{...txt(17,C.white,'900'),marginTop:16}}>{title}</Text>
+        <Text style={{...txt(12,C.muted),marginTop:10,lineHeight:20}}>{detail}</Text>
+        <Text style={{...txt(10,C.gold,'800'),marginTop:13}}>COMING LATER</Text>
+       </View>
+      )}
+     </View>
+     <View style={panel({marginTop:16})}><Text style={txt(17,C.white,'900')}>Build your personal profile first</Text><Text style={{...txt(12,C.muted),marginTop:7,lineHeight:19}}>Link your MLBB ID and track your collection while the social hub is in development.</Text><Action title="Open My Player" subtle onPress={()=>switchTab('player')}/></View>
+    </>:null}
     {tab==='settings'?<>
      {sectionTitle('Your account','A private space for your profile, session, and preferences.')}
-     <View style={panel({maxWidth:700})}><Chip color={C.green}>● SIGNED IN</Chip><Text style={{...txt(22,C.white,'900'),marginTop:17}}>{user.name}</Text><Text style={{...txt(13,C.muted),marginTop:6}}>{user.email}</Text><View style={{height:1,backgroundColor:C.stroke,marginVertical:20}}/><Text style={txt(14,C.white,'800')}>Your data</Text><Text style={{...txt(12,C.muted),marginTop:9,lineHeight:21}}>MLBB identifiers are saved to your authenticated Neon profile. Collection and goal tracking currently use account-scoped storage on this device; they are not yet synced between devices.</Text><Action title="Manage player details" subtle onPress={()=>switchTab('player')}/><Action title="Sign out securely" onPress={signOut} disabled={busy}/></View>
+     <View style={panel({maxWidth:700})}><Chip color={C.green}>● SIGNED IN</Chip><Text style={{...txt(22,C.white,'900'),marginTop:17}}>{user.name}</Text><Text style={{...txt(13,C.muted),marginTop:6}}>{user.email}</Text><View style={{height:1,backgroundColor:C.stroke,marginVertical:20}}/><Text style={txt(14,C.white,'800')}>Your data</Text><Text style={{...txt(12,C.muted),marginTop:9,lineHeight:21}}>MLBB identifiers are saved to your authenticated Neon profile. Skin collection, diamond goals and notes are backed up locally, with optional private Neon sync once the additive tracker migration has been applied.</Text><Chip color={syncStatus==='cloud'?C.green:C.gold}>{syncStatus==='cloud'?'● CLOUD SYNC ACTIVE':syncStatus==='loading'?'● LOADING TRACKER':'● LOCAL BACKUP ACTIVE'}</Chip><Action title="Manage player details" subtle onPress={()=>switchTab('player')}/><Action title="Sign out securely" onPress={signOut} disabled={busy}/></View>
     </>:null}
    </Animated.View>)}
    {shell(<View style={{borderTopWidth:1,borderColor:C.stroke,marginTop:60,paddingTop:22,alignItems:'center'}}><Text style={txt(11,C.muted)}>MYTHICHUB • AN INDEPENDENT GAMING COMPANION • NOT AFFILIATED WITH MOONTON</Text></View>)}
